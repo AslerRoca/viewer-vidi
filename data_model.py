@@ -65,7 +65,7 @@ class GroupedSeriesMeta:
     study_dir:    str
     study_name:   str
     group_name:   str        # base series name (temporal suffix stripped)
-    series_dirs:  list       # sorted list of (series_name, series_path, n_files)
+    series_dirs:  list       # sorted list of SeriesMeta
     n_timepoints: int
 
 

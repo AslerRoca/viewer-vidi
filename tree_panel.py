@@ -8,10 +8,9 @@ import threading as _threading
 import concurrent.futures as _cf
 
 from PyQt5.QtCore import (
-    Qt, QTimer, pyqtSignal, QPoint, QMimeData,
-    QSortFilterProxyModel, QDir, QModelIndex, QItemSelectionModel,
+    Qt, QTimer, pyqtSignal, QMimeData,
+    QSortFilterProxyModel, QDir, QModelIndex,
 )
-from PyQt5.QtGui import QDrag
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QSplitter,
     QPushButton, QLineEdit, QFileDialog, QMenu, QMessageBox,
@@ -87,6 +86,7 @@ def _make_grouped_meta(study_dir: str) -> "GroupedSeriesMeta | None":
         return None
 
     series_list = []
+    study_name = os.path.basename(study_dir)
     for name in subdirs:
         sp = os.path.join(study_dir, name)
         try:
@@ -94,15 +94,22 @@ def _make_grouped_meta(study_dir: str) -> "GroupedSeriesMeta | None":
         except OSError:
             n = 0
         if n:
-            series_list.append((name, sp, n))
+            series_list.append(SeriesMeta(
+                study_dir=study_dir,
+                series_dir=sp,
+                series_name=name,
+                study_name=study_name,
+                n_files=n,
+                file_format="dicom",
+            ))
 
     if not series_list:
         return None
 
     return GroupedSeriesMeta(
         study_dir=study_dir,
-        study_name=os.path.basename(study_dir),
-        group_name=os.path.basename(study_dir),
+        study_name=study_name,
+        group_name=study_name,
         series_dirs=series_list,
         n_timepoints=len(series_list),
     )
@@ -119,15 +126,22 @@ def _make_grouped_from_paths(paths: list) -> "GroupedSeriesMeta | None":
             n = 0
         if n == 0:
             continue
-        series_list.append((os.path.basename(path), path, n))
         if study_dir is None:
             study_dir = os.path.dirname(path)
+        series_list.append(SeriesMeta(
+            study_dir=study_dir,
+            series_dir=path,
+            series_name=os.path.basename(path),
+            study_name=os.path.basename(study_dir),
+            n_files=n,
+            file_format="dicom",
+        ))
 
     if not series_list or study_dir is None:
         return None
 
-    label = (f"{series_list[0][0]} … {series_list[-1][0]}"
-             if len(series_list) > 1 else series_list[0][0])
+    label = (f"{series_list[0].series_name} … {series_list[-1].series_name}"
+             if len(series_list) > 1 else series_list[0].series_name)
     return GroupedSeriesMeta(
         study_dir=study_dir,
         study_name=os.path.basename(study_dir),
@@ -217,6 +231,48 @@ class _SmartProxy(QSortFilterProxyModel):
             return True
         return os.path.isdir(path)
 
+    def flags(self, index: QModelIndex) -> Qt.ItemFlags:
+        f = super().flags(index)
+        if index.isValid():
+            src  = self.mapToSource(index)
+            path = self.sourceModel().filePath(src)
+            if os.path.isdir(path):
+                f |= Qt.ItemIsDragEnabled
+        return f
+
+    # ── Drag MIME ─────────────────────────────────────────────────────────
+    # Qt calls mimeData() inside its own startDrag() → exec() chain.
+    # We build the payload here so there is no second QDrag.exec_() call
+    # (which would collide with Qt's active drag and cause the
+    # "QDragManager::drag in possibly invalid state" warning).
+
+    def mimeTypes(self):
+        return [drag_state.MIME_TYPE]
+
+    def supportedDragActions(self):
+        return Qt.CopyAction
+
+    def mimeData(self, indexes):
+        paths, seen = [], set()
+        for idx in indexes:
+            if idx.column() != 0:
+                continue
+            src  = self.mapToSource(idx)
+            path = self.sourceModel().filePath(src)
+            if path and path not in seen:
+                seen.add(path)
+                paths.append(path)
+        if not paths:
+            return None
+        meta = (_make_grouped_from_paths(paths) if len(paths) > 1 else None) \
+               or _make_series_meta(paths[0])
+        if meta is None:
+            return None
+        drag_state.set_payload(meta)
+        mime = QMimeData()
+        mime.setData(drag_state.MIME_TYPE, b"1")
+        return mime
+
     def _is_leaf_dir(self, path: str) -> bool:
         return _dir_type_cache.get(path) in ("dicom", "image")
 
@@ -239,101 +295,31 @@ class _SmartProxy(QSortFilterProxyModel):
         return super().canFetchMore(parent)
 
 
-# ── Tree view with multi-select drag ──────────────────────────────────────────
+# ── Tree view ─────────────────────────────────────────────────────────────────
 
 class _FileTree(QTreeView):
-    """QTreeView with left-drag → MIME payload, multi-select preserved on drag."""
+    """QTreeView that delegates drag entirely to Qt.
+
+    · setDragEnabled(True) activates Qt's built-in delayed-selection logic:
+      clicking an already-selected item inside a multi-selection does NOT clear
+      the selection until mouse-release (pressedAlreadySelected mechanism).
+    · _SmartProxy.mimeData() builds our payload and returns our MIME type so
+      ViewCell.dragEnterEvent accepts the drop.
+    · startDrag() override only clears the drag_state payload after exec()
+      in case the drag was cancelled without a drop.
+    """
 
     def __init__(self, fs_model: QFileSystemModel, proxy: _SmartProxy, parent=None):
         super().__init__(parent)
-        self._fs               = fs_model
-        self._proxy            = proxy
-        self._drag_start       : QPoint | None = None
-        self._press_suppressed : bool = False
-        self._drag_done        : bool = False
+        self._fs    = fs_model
+        self._proxy = proxy
+        self.setDragEnabled(True)
+        self.setDragDropMode(QAbstractItemView.DragOnly)
+        self.setDefaultDropAction(Qt.CopyAction)
 
-    # ── Mouse — multi-select drag fix ─────────────────────────────────────
-    #
-    # Problem: super().mousePressEvent clears multi-selection before a drag
-    # starts.  Fix: suppress super when clicking an already-selected item in a
-    # multi-selection; retroactively apply normal single-click on release if no
-    # drag occurred.
-
-    def mousePressEvent(self, event) -> None:
-        self._press_suppressed = False
-        self._drag_done        = False
-        if event.button() == Qt.LeftButton:
-            self._drag_start = event.pos()
-            idx = self.indexAt(event.pos())
-            sel = self.selectionModel()
-            mods = event.modifiers()
-            if (idx.isValid()
-                    and sel.isSelected(idx)
-                    and len(sel.selectedRows()) > 1
-                    and not (mods & (Qt.ControlModifier | Qt.ShiftModifier))):
-                self._press_suppressed = True
-                return
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event) -> None:
-        if self._drag_start is not None and (event.buttons() & Qt.LeftButton):
-            if (event.pos() - self._drag_start).manhattanLength() > 8:
-                path             = self._path_at(self._drag_start)
-                self._drag_start = None
-                self._drag_done  = True
-                if path:
-                    self._begin_drag(path)
-                return
-        super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event) -> None:
-        suppressed = self._press_suppressed
-        drag_done  = self._drag_done
-        self._press_suppressed = False
-        self._drag_done        = False
-        self._drag_start       = None
-
-        if suppressed and not drag_done and event.button() == Qt.LeftButton:
-            idx = self.indexAt(event.pos())
-            if idx.isValid():
-                self.selectionModel().select(
-                    idx,
-                    QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows,
-                )
-            super().mouseReleaseEvent(event)
-        elif not suppressed:
-            super().mouseReleaseEvent(event)
-
-    # ── Helpers ───────────────────────────────────────────────────────────
-
-    def _path_at(self, pos: QPoint) -> str | None:
-        idx = self.indexAt(pos)
-        if not idx.isValid():
-            return None
-        return self._fs.filePath(self._proxy.mapToSource(idx))
-
-    def _begin_drag(self, path: str) -> None:
-        sel_rows = self.selectionModel().selectedRows()
-        if len(sel_rows) > 1:
-            paths, seen = [], set()
-            for idx in sel_rows:
-                p = self._fs.filePath(self._proxy.mapToSource(idx))
-                if p and p not in seen:
-                    seen.add(p)
-                    paths.append(p)
-            meta = _make_grouped_from_paths(paths) or _make_series_meta(path)
-        else:
-            meta = _make_series_meta(path)
-
-        if meta is None:
-            return
-        drag_state.set_payload(meta)
-        mime = QMimeData()
-        mime.setData(drag_state.MIME_TYPE, b"1")
-        d = QDrag(self)
-        d.setMimeData(mime)
-        d.exec_(Qt.CopyAction)
-        drag_state.clear_payload()
+    def startDrag(self, supported_actions: Qt.DropActions) -> None:
+        super().startDrag(supported_actions)   # builds MIME via mimeData(), runs exec()
+        drag_state.clear_payload()             # no-op if drop succeeded; cleans up if cancelled
 
 
 # ── Main widget ───────────────────────────────────────────────────────────────
