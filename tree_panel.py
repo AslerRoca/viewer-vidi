@@ -441,7 +441,7 @@ class StudyTreeWidget(QWidget):
         from .time_course_window import TimeCourseWindow
         self._tc_panel = TimeCourseWindow(parent=self, embedded=True)
         self._tc_panel.setVisible(False)
-        self._tc_panel.setMinimumHeight(100)
+        self._tc_panel.setMinimumHeight(300)
 
         self._splitter = QSplitter(Qt.Vertical)
         self._splitter.addWidget(self._tree)
