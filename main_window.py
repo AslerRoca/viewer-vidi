@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QKeySequence, QIcon
+from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QMainWindow, QSplitter, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QComboBox, QDoubleSpinBox, QStatusBar, QShortcut,
@@ -21,9 +21,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Vidi")
         self.resize(1400, 900)
-        import os as _os
-        _icon_path = _os.path.join(_os.path.dirname(__file__), "icons", "vidi.svg")
-        self.setWindowIcon(QIcon(_icon_path))
 
         self._build_ui()
         self._connect_signals()
