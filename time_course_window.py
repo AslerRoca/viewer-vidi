@@ -274,7 +274,7 @@ class TimeCourseWindow(QWidget):
                 _w.simplefilter("ignore")
                 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
                 from matplotlib.figure import Figure
-            fig = Figure(facecolor=_PANEL, tight_layout=True)
+            fig = Figure(facecolor=_PANEL, layout="tight")
             self._ax = fig.add_subplot(111)
             self._fig = fig
             self._plot_canvas = FigureCanvasQTAgg(fig)
