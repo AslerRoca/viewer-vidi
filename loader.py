@@ -481,8 +481,52 @@ class LoaderWorker(QThread):
         else:
             self._run_grouped_generic(gmeta, members)
 
+    def _run_flat_2dt(self, gmeta, members) -> None:
+        """Load N individual flat DICOM files as a 2D-T series."""
+        n_t = len(members)
+        headers0 = self._parallel_read_headers([members[0].series_dir])
+        if not headers0:
+            self.load_error.emit("Could not read first DICOM file.")
+            return
+        ds0      = headers0[0][1]
+        rows     = int(ds0.get("Rows", 0) or 0)
+        cols     = int(ds0.get("Columns", 0) or 0)
+        wc, ww   = wl_from_dicom(ds0)
+        wl_hdr   = wc is not None
+        if not wl_hdr:
+            wc, ww = 2048.0, 4096.0
+
+        dummy = SeriesMeta(
+            study_dir=gmeta.study_dir, series_dir=members[0].series_dir,
+            series_name=gmeta.group_name, study_name=gmeta.study_name,
+            n_files=n_t, series_type=SeriesType.S2DT,
+        )
+        sd = _make_plain_sd(dummy, SeriesType.S2DT, rows=rows, cols=cols,
+                            n_z=1, n_t=n_t, wc=wc, ww=ww)
+        sd.wl_from_header = wl_hdr
+
+        if self._cancel.is_set():
+            return
+        self.headers_ready.emit(sd)
+
+        full = np.zeros((n_t, rows, cols), dtype=np.float32)
+        full[0] = self._read_slice_from_ds(headers0[0][1], rows, cols)
+        for t in range(1, n_t):
+            if self._cancel.is_set():
+                return
+            full[t] = self._read_slice(members[t].series_dir, rows, cols)
+            self.progress.emit(t + 1, n_t)
+
+        if not wl_hdr:
+            sd.window_center, sd.window_width = wl_from_percentiles(full[0])
+        self.pixels_ready.emit(0, full)
+
     def _run_grouped_dicom(self, gmeta, members) -> None:
         """Grouped DICOM load: each member is one 3D timepoint directory."""
+        # Flat individual files → 2D-T
+        if all(os.path.isfile(m.series_dir) for m in members):
+            self._run_flat_2dt(gmeta, members)
+            return
         from .data_model import acq_plane_info
         n_t = len(members)
 

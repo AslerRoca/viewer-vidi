@@ -44,6 +44,13 @@ def _make_series_meta(path: str) -> "SeriesMeta | GroupedSeriesMeta | None":
                 study_name=os.path.basename(os.path.dirname(path)),
                 n_files=1, file_format="nifti",
             )
+        if os.path.splitext(nl)[1] in _IMAGE_EXTS:
+            return SeriesMeta(
+                study_dir=os.path.dirname(path), series_dir=path,
+                series_name=os.path.basename(path),
+                study_name=os.path.basename(os.path.dirname(path)),
+                n_files=1, file_format="image",
+            )
         return None
 
     if not os.path.isdir(path):
@@ -124,6 +131,49 @@ def _make_grouped_meta(study_dir: str) -> "GroupedSeriesMeta | None":
 
 
 def _make_grouped_from_paths(paths: list) -> "GroupedSeriesMeta | None":
+    # Individual image files dragged → one file per timepoint
+    img_files = [p for p in sorted(paths)
+                 if os.path.isfile(p) and os.path.splitext(p.lower())[1] in _IMAGE_EXTS]
+    if img_files:
+        study_dir = os.path.dirname(img_files[0])
+        series_list = [
+            SeriesMeta(
+                study_dir=study_dir, series_dir=f,
+                series_name=os.path.basename(f),
+                study_name=os.path.basename(study_dir),
+                n_files=1, file_format="image",
+            )
+            for f in img_files
+        ]
+        return GroupedSeriesMeta(
+            study_dir=study_dir,
+            study_name=os.path.basename(study_dir),
+            group_name=f"{len(img_files)} images",
+            series_dirs=series_list,
+            n_timepoints=len(series_list),
+        )
+
+    # Individual .dcm files dragged → build a GroupedSeriesMeta, one file per timepoint
+    dcm_files = [p for p in sorted(paths) if os.path.isfile(p) and p.lower().endswith(".dcm")]
+    if dcm_files:
+        study_dir = os.path.dirname(dcm_files[0])
+        series_list = [
+            SeriesMeta(
+                study_dir=study_dir, series_dir=f,
+                series_name=os.path.basename(f),
+                study_name=os.path.basename(study_dir),
+                n_files=1, file_format="dicom",
+            )
+            for f in dcm_files
+        ]
+        return GroupedSeriesMeta(
+            study_dir=study_dir,
+            study_name=os.path.basename(study_dir),
+            group_name=f"{len(dcm_files)} files",
+            series_dirs=series_list,
+            n_timepoints=len(series_list),
+        )
+
     series_list, study_dir = [], None
     for path in sorted(paths):
         if not os.path.isdir(path):
@@ -227,11 +277,11 @@ class _SmartProxy(QSortFilterProxyModel):
         path = self.sourceModel().filePath(idx)
 
         if path.lower().endswith(".dcm"):
-            # Show individual .dcm files only inside a classified flat-DICOM dir
             parent_path = os.path.dirname(path)
             return _dir_type_cache.get(parent_path) == "dicom"
         if os.path.isfile(path) and os.path.splitext(path.lower())[1] in _IMAGE_EXTS:
-            return False
+            parent_path = os.path.dirname(path)
+            return _dir_type_cache.get(parent_path) == "image"
 
         rx = self.filterRegExp()
         if rx.isEmpty():
@@ -291,18 +341,9 @@ class _SmartProxy(QSortFilterProxyModel):
             return super().hasChildren(parent)
         src  = self.mapToSource(parent)
         path = self.sourceModel().filePath(src)
-        # "dicom" dirs now expand to show individual files; "image" dirs stay leaf
-        if _dir_type_cache.get(path) == "image":
-            return False
         return super().hasChildren(parent)
 
     def canFetchMore(self, parent: QModelIndex) -> bool:
-        if not parent.isValid():
-            return super().canFetchMore(parent)
-        src  = self.mapToSource(parent)
-        path = self.sourceModel().filePath(src)
-        if _dir_type_cache.get(path) == "image":
-            return False
         return super().canFetchMore(parent)
 
 
