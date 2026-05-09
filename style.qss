@@ -47,6 +47,15 @@ QTreeWidget::branch:closed:has-children:has-siblings {
     border-image: none;
 }
 
+QTreeView::branch:has-children:!has-siblings:closed,
+QTreeView::branch:closed:has-children:has-siblings {
+    image: url({STYLE_DIR}/icons/arrow_right.svg);
+}
+QTreeView::branch:open:has-children:!has-siblings,
+QTreeView::branch:open:has-children:has-siblings {
+    image: url({STYLE_DIR}/icons/arrow_down.svg);
+}
+
 QHeaderView::section {
     background-color: #1e1e2e;
     color: #6c7086;

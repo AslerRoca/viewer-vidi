@@ -30,6 +30,13 @@ _IMAGE_EXTS  = frozenset({".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".we
 def _make_series_meta(path: str) -> "SeriesMeta | GroupedSeriesMeta | None":
     if os.path.isfile(path):
         nl = path.lower()
+        if nl.endswith(".dcm"):
+            return SeriesMeta(
+                study_dir=os.path.dirname(path), series_dir=path,
+                series_name=os.path.basename(path),
+                study_name=os.path.basename(os.path.dirname(path)),
+                n_files=1, file_format="dicom",
+            )
         if any(nl.endswith(e) for e in _NIFTI_EXTS):
             return SeriesMeta(
                 study_dir=os.path.dirname(path), series_dir=path,
@@ -65,7 +72,8 @@ def _make_series_meta(path: str) -> "SeriesMeta | GroupedSeriesMeta | None":
         )
 
     imgs = [f for f in files if os.path.splitext(f.lower())[1] in _IMAGE_EXTS]
-    if imgs:
+    has_subdirs = any(os.path.isdir(os.path.join(path, f)) for f in files)
+    if imgs and not has_subdirs:
         return SeriesMeta(
             study_dir=os.path.dirname(path), series_dir=path,
             series_name=os.path.basename(path),
@@ -219,7 +227,9 @@ class _SmartProxy(QSortFilterProxyModel):
         path = self.sourceModel().filePath(idx)
 
         if path.lower().endswith(".dcm"):
-            return False
+            # Show individual .dcm files only inside a classified flat-DICOM dir
+            parent_path = os.path.dirname(path)
+            return _dir_type_cache.get(parent_path) == "dicom"
         if os.path.isfile(path) and os.path.splitext(path.lower())[1] in _IMAGE_EXTS:
             return False
 
@@ -281,7 +291,8 @@ class _SmartProxy(QSortFilterProxyModel):
             return super().hasChildren(parent)
         src  = self.mapToSource(parent)
         path = self.sourceModel().filePath(src)
-        if self._is_leaf_dir(path):
+        # "dicom" dirs now expand to show individual files; "image" dirs stay leaf
+        if _dir_type_cache.get(path) == "image":
             return False
         return super().hasChildren(parent)
 
@@ -290,7 +301,7 @@ class _SmartProxy(QSortFilterProxyModel):
             return super().canFetchMore(parent)
         src  = self.mapToSource(parent)
         path = self.sourceModel().filePath(src)
-        if self._is_leaf_dir(path):
+        if _dir_type_cache.get(path) == "image":
             return False
         return super().canFetchMore(parent)
 
@@ -451,7 +462,23 @@ class StudyTreeWidget(QWidget):
         path = QFileDialog.getExistingDirectory(
             self, "Select root directory", self._data_root
         )
-        if path and path != self._data_root:
+        if not path:
+            return
+
+        # If the selected dir is itself a DICOM/image series, navigate to the
+        # parent so the tree isn't empty, and auto-load the series.
+        meta = _make_series_meta(path)
+        if meta is not None:
+            parent = os.path.dirname(path)
+            self._data_root = parent
+            self._dir_btn.setToolTip(parent)
+            self._fs.setRootPath(parent)
+            self._set_root(parent)
+            self.root_changed.emit(parent)
+            self.series_selected.emit(meta)
+            return
+
+        if path != self._data_root:
             self._data_root = path
             self._dir_btn.setToolTip(path)
             self._fs.setRootPath(path)

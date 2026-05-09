@@ -136,8 +136,12 @@ class MainWindow(QMainWindow):
 
     def _load_stylesheet(self) -> None:
         try:
+            import os as _os
             with open(STYLE_PATH) as f:
-                self.setStyleSheet(f.read())
+                css = f.read()
+            style_dir = _os.path.dirname(_os.path.abspath(STYLE_PATH))
+            css = css.replace("{STYLE_DIR}", style_dir)
+            self.setStyleSheet(css)
         except Exception:
             pass
 
