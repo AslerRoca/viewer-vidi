@@ -1,6 +1,16 @@
 import os
 
-DATA_ROOT = "/media/zsk/ressd/research/projects/Deep_CXR_Perfusion/1_data/raw/3_images/MRIs"
+def _default_data_root():
+    candidates = [
+        "/Volumes/ressd/research/projects/Deep_CXR_Perfusion/1_data/raw/3_images/MRIs",  # macOS
+        "/media/zsk/ressd/research/projects/Deep_CXR_Perfusion/1_data/raw/3_images/MRIs",  # Linux
+    ]
+    for p in candidates:
+        if os.path.isdir(p):
+            return p
+    return os.path.expanduser("~")
+
+DATA_ROOT = _default_data_root()
 
 STYLE_PATH = os.path.join(os.path.dirname(__file__), "style.qss")
 

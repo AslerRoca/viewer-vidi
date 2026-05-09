@@ -6,10 +6,21 @@ four-panel workspace.
 
 ## Run
 
+The directory name contains a dash, which Python's `-m` flag can't handle. Use the launcher script at the research root instead.
+
+**macOS** (venv at `viewer-vidi/.venv/`, Python 3.10 via Homebrew):
+```bash
+cd /Volumes/ressd/research
+viewer-vidi/.venv/bin/python launch_viewer.py
+```
+
+**Linux** (conda env `viewer_vidi`):
 ```bash
 cd /media/zsk/ressd/research
-python -m viewer_vidi
+conda run -n viewer_vidi python launch_viewer.py
 ```
+
+`launch_viewer.py` uses `importlib` to load the package from the dash-named directory and register it as `viewer_vidi` in `sys.modules` — required because the drive is exFAT and symlinks are not supported.
 
 ## Features
 
