@@ -144,6 +144,7 @@ class TimeCourseWindow(QWidget):
 
     def _on_clear(self) -> None:
         self._points = []
+        self._roi_tc_polys = []
         self._redraw()
         self.clear_requested.emit()
 

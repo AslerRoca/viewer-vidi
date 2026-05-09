@@ -511,6 +511,10 @@ class ViewCell(QWidget):
         else:
             panel.setVisible(False)
 
+    def _clear_all_tc(self) -> None:
+        self._canvas.clear_tc_points()
+        self._canvas.clear_roi_tc_polys()
+
     def _ensure_tc_window(self) -> None:
         if self._tc_panel_ref is not None:
             w = self._tc_panel_ref
@@ -520,7 +524,7 @@ class ViewCell(QWidget):
                     w.clear_requested.disconnect()
                 except TypeError:
                     pass
-                w.clear_requested.connect(self._canvas.clear_tc_points)
+                w.clear_requested.connect(self._clear_all_tc)
                 self._tc_window = w
             w.set_series_name(self._series_lbl.text())
             w.setVisible(True)
@@ -529,7 +533,7 @@ class ViewCell(QWidget):
             if self._tc_window is None:
                 from .time_course_window import TimeCourseWindow
                 self._tc_window = TimeCourseWindow()
-                self._tc_window.clear_requested.connect(self._canvas.clear_tc_points)
+                self._tc_window.clear_requested.connect(self._clear_all_tc)
                 self._tc_window.window_closed.connect(self._on_tc_window_closed)
             self._tc_window.set_series_name(self._series_lbl.text())
             mw = self.window()
