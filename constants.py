@@ -2,8 +2,8 @@ import os
 
 def _default_data_root():
     candidates = [
-        "/Volumes/ressd/research/projects/Deep_CXR_Perfusion/1_data/raw/3_images/MRIs",  # macOS
-        "/media/zsk/ressd/research/projects/Deep_CXR_Perfusion/1_data/raw/3_images/MRIs",  # Linux
+        "/Volumes/ressd/research",   # macOS
+        "/media/zsk/ressd/research", # Linux
     ]
     for p in candidates:
         if os.path.isdir(p):

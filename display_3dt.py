@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import numpy as np
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QEvent, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout,
     QSlider, QLabel, QPushButton, QDoubleSpinBox,
@@ -34,6 +34,8 @@ class ImageView3DT(QWidget):
         for pv in (self._pv0, self._pv1, self._pv2):
             pv.canvas.wl_changed.connect(self._on_wl_changed)
             pv.canvas.pixel_hovered.connect(self.pixel_hovered)
+            pv.canvas.setFocusPolicy(Qt.ClickFocus)
+            pv.canvas.installEventFilter(self)
 
         self._pv0.slice_changed.connect(self._on_s0)
         self._pv1.slice_changed.connect(self._on_s1)
@@ -159,6 +161,14 @@ class ImageView3DT(QWidget):
         self.wl_changed.emit(wc, ww)
 
     # ── Playback ────────────────────────────────────────────────────────────
+
+    def eventFilter(self, obj, event) -> bool:
+        canvases = (self._pv0.canvas, self._pv1.canvas, self._pv2.canvas)
+        if obj in canvases and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Space:
+                self._play_btn.toggle()
+                return True
+        return super().eventFilter(obj, event)
 
     def _on_play_toggled(self, playing: bool) -> None:
         self._play_btn.setText("⏸" if playing else "▶")

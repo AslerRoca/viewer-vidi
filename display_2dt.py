@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import numpy as np
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QEvent, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QSlider, QLabel, QDoubleSpinBox,
@@ -26,6 +26,8 @@ class ImageView2DT(QWidget):
         self._canvas = ImageCanvas(self)
         self._canvas.wl_changed.connect(self.wl_changed)
         self._canvas.pixel_hovered.connect(self.pixel_hovered)
+        self._canvas.setFocusPolicy(Qt.ClickFocus)
+        self._canvas.installEventFilter(self)
 
         # playback controls
         self._play_btn  = QPushButton("▶")
@@ -118,3 +120,10 @@ class ImageView2DT(QWidget):
         self._timer.stop()
         self._play_btn.setChecked(False)
         self._play_btn.setText("▶")
+
+    def eventFilter(self, obj, event) -> bool:
+        if obj is self._canvas and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Space:
+                self._play_btn.toggle()
+                return True
+        return super().eventFilter(obj, event)

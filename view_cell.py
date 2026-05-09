@@ -139,6 +139,7 @@ class ViewCell(QWidget):
 
         # ── Canvas + vertical slice slider ─────────────────────────────────
         self._canvas = ImageCanvas(self)
+        self._canvas.setFocusPolicy(Qt.ClickFocus)
         self._canvas.wl_changed.connect(self._on_canvas_wl)
         self._canvas.pixel_hovered.connect(self.pixel_hovered)
         self._canvas.tc_points_changed.connect(self._on_tc_points_changed)
@@ -730,6 +731,10 @@ class ViewCell(QWidget):
             t = event.type()
             if t == QEvent.MouseButtonPress:
                 self.activated.emit()
+            elif t == QEvent.KeyPress:
+                if event.key() == Qt.Key_Space and self._bottom_bar.isVisible():
+                    self._play_btn.toggle()
+                    return True
             elif t == QEvent.MouseButtonDblClick:
                 self.double_clicked.emit()
                 return True   # consume: prevent W/L drag start on dbl-click

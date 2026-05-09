@@ -2,7 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LAUNCHER="$SCRIPT_DIR/../launch_viewer.py"
+RESEARCH_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+LAUNCHER="$RESEARCH_ROOT/launch_viewer.py"
 
 case "$(uname -s)" in
     Darwin)
