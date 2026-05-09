@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QMainWindow, QSplitter, QWidget, QHBoxLayout, QVBoxLayout,
-    QLabel, QPushButton, QComboBox, QDoubleSpinBox, QStatusBar,
+    QLabel, QPushButton, QComboBox, QDoubleSpinBox, QStatusBar, QShortcut,
 )
 
 from .constants import TREE_WIDTH, STYLE_PATH, BADGE_COLORS
@@ -82,11 +83,12 @@ class MainWindow(QMainWindow):
         self._tree.setMinimumWidth(200)
         self._tree.setMaximumWidth(450)
 
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.addWidget(self._tree)
-        splitter.addWidget(self._quad)
-        splitter.setSizes([TREE_WIDTH, 1100])
-        splitter.setStretchFactor(1, 1)
+        self._splitter = QSplitter(Qt.Horizontal)
+        self._splitter.addWidget(self._tree)
+        self._splitter.addWidget(self._quad)
+        self._splitter.setSizes([TREE_WIDTH, 1100])
+        self._splitter.setStretchFactor(1, 1)
+        self._tree_width = TREE_WIDTH
 
         # ── Status bar ─────────────────────────────────────────────────────
         sb = QStatusBar()
@@ -117,10 +119,12 @@ class MainWindow(QMainWindow):
         root_lay.setContentsMargins(0, 0, 0, 0)
         root_lay.setSpacing(0)
         root_lay.addWidget(toolbar)
-        root_lay.addWidget(splitter, 1)
+        root_lay.addWidget(self._splitter, 1)
         self.setCentralWidget(central)
 
     def _connect_signals(self) -> None:
+        QShortcut(QKeySequence("Ctrl+B"), self).activated.connect(self._toggle_sidebar)
+
         # Tree → active cell load
         self._tree.series_selected.connect(self._on_series_selected)
 
@@ -206,6 +210,15 @@ class MainWindow(QMainWindow):
             f"padding: 2px 8px; border-radius: 4px;"
             f"background: {color}22;"
         )
+
+    def _toggle_sidebar(self) -> None:
+        if self._tree.isVisible():
+            self._tree_width = self._splitter.sizes()[0] or self._tree_width
+            self._tree.hide()
+        else:
+            self._tree.show()
+            total = sum(self._splitter.sizes())
+            self._splitter.setSizes([self._tree_width, total - self._tree_width])
 
     def closeEvent(self, event) -> None:
         self._quad.cancel_all()
