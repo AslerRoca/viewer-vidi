@@ -6,21 +6,13 @@ four-panel workspace.
 
 ## Run
 
-The directory name contains a dash, which Python's `-m` flag can't handle. Use the launcher script at the research root instead.
-
-**macOS** (venv at `viewer-vidi/.venv/`, Python 3.10 via Homebrew):
 ```bash
-cd /Volumes/ressd/research
-viewer-vidi/.venv/bin/python launch_viewer.py
+bash viewer-vidi/start_viewer.sh
 ```
 
-**Linux** (conda env `viewer_vidi`):
-```bash
-cd /media/zsk/ressd/research
-conda run -n viewer_vidi python launch_viewer.py
-```
+Run from the research root on either platform — the script auto-detects macOS (uses the `.venv` inside `viewer-vidi/`) or Linux (uses the `viewer_vidi` conda env) and launches via `launch_viewer.py`.
 
-`launch_viewer.py` uses `importlib` to load the package from the dash-named directory and register it as `viewer_vidi` in `sys.modules` — required because the drive is exFAT and symlinks are not supported.
+> **Why not `python -m viewer-vidi`?** The dash in the directory name is not a valid Python identifier, and the exFAT drive does not support symlinks, so the standard `-m` approach cannot be used. `launch_viewer.py` loads the package via `importlib` as a workaround.
 
 ## Features
 
@@ -61,17 +53,18 @@ conda run -n viewer_vidi python launch_viewer.py
 ## Dependencies
 
 ```
-pydicom >= 3.0
 PyQt5 >= 5.15
-numpy
-Pillow          # for PNG/JPEG/BMP/TIFF
-nibabel         # for NIfTI (.nii / .nii.gz)
+numpy >= 1.24
+pydicom >= 3.0
+nibabel             # for NIfTI (.nii / .nii.gz)
+Pillow              # for PNG/JPEG/BMP/TIFF
+matplotlib >= 3.6   # for the time-course plot panel
 ```
 
-Install missing dependencies:
+Install into the venv:
 
 ```bash
-pip install nibabel Pillow
+pip install -r requirements.txt
 ```
 
 ## Package layout
@@ -96,4 +89,3 @@ viewer_vidi/
 ## Known Issues
 
 - Multi-select drag requires each series to be loaded (double-clicked) individually first before dragging as a group.
-- ROI time-course "Clear points" button is not yet functional (fix pending).
