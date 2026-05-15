@@ -12,7 +12,7 @@ bash viewer-vidi/start_viewer.sh
 
 Run from the research root on either platform — the script auto-detects macOS (uses the `.venv` inside `viewer-vidi/`) or Linux (uses the `viewer_vidi` conda env) and launches via `launch_viewer.py`.
 
-> **Why not `python -m viewer-vidi`?** The dash in the directory name is not a valid Python identifier, and the exFAT drive does not support symlinks, so the standard `-m` approach cannot be used. `launch_viewer.py` loads the package via `importlib` as a workaround.
+> **Why not `python -m viewer-vidi`?** The dash in the directory name is not a valid Python identifier, and the exFAT drive does not support symlinks, so the standard `-m` approach cannot be used. `run.py` (inside the project) loads the package via `importlib` as a workaround.
 
 ## Features
 

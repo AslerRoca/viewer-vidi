@@ -1,7 +1,5 @@
 import numpy as np
 
-LUT_SIZE = 65536  # full uint16 range
-
 
 def render_to_rgb(pixels, wc: float, ww: float, cmap: np.ndarray) -> np.ndarray:
     """Map a float32 (H, W) slice to uint8 RGB (H, W, 3).
@@ -24,28 +22,6 @@ def render_to_rgb(pixels, wc: float, ww: float, cmap: np.ndarray) -> np.ndarray:
     # CPU path (numpy)
     alpha = np.clip((np.asarray(pixels, dtype=np.float32) - lo) / scale, 0.0, 1.0)
     return np.ascontiguousarray(cmap[(alpha * 255.0).astype(np.uint8)])
-
-
-def build_lut(wc: float, ww: float, cmap: np.ndarray) -> np.ndarray:
-    """Return uint8 RGB LUT of shape (65536, 3).
-
-    cmap: (256, 3) uint8 colormap array.
-    """
-    half = ww / 2.0
-    lo = wc - half
-    indices = np.arange(LUT_SIZE, dtype=np.float32)
-    normalized = np.clip((indices - lo) / ww, 0.0, 1.0)
-    lut_idx = (normalized * 255.0).astype(np.uint8)
-    return cmap[lut_idx]  # (65536, 3) uint8
-
-
-def apply_lut(pixels: np.ndarray, lut: np.ndarray) -> np.ndarray:
-    """Map a float32 (H, W) slice through the LUT to uint8 RGB (H, W, 3).
-
-    Clips float values to [0, 65535] before indexing.
-    """
-    idx = np.clip(pixels, 0, LUT_SIZE - 1).astype(np.uint16)
-    return np.ascontiguousarray(lut[idx])  # (H, W, 3)
 
 
 def wl_from_percentiles(pixels: np.ndarray) -> tuple[float, float]:

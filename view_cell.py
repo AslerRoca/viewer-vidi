@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 import numpy as np
-from PyQt5.QtCore import Qt, QTimer, QEvent, pyqtSignal, QMimeData, QPoint
-from PyQt5.QtGui import QDrag, QColor, QPalette
+from PyQt5.QtCore import Qt, QTimer, QEvent, pyqtSignal
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QSlider, QLabel, QDoubleSpinBox,
@@ -13,7 +12,7 @@ from PyQt5.QtWidgets import (
 from .image_canvas import ImageCanvas
 from .loader import LoaderWorker
 from .data_model import SeriesData, SeriesType
-from .constants import DEFAULT_FPS, MAX_FPS, BADGE_COLORS
+from .constants import DEFAULT_FPS, MAX_FPS
 from . import drag_state
 
 

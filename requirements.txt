@@ -2,4 +2,5 @@ PyQt5>=5.15
 numpy>=1.24
 nibabel
 pydicom
+Pillow
 matplotlib>=3.6

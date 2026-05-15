@@ -8,3 +8,10 @@ dist/
 build/
 .env
 .venv
+
+# IDE
+.idea/
+
+# macOS metadata
+._*
+.DS_Store

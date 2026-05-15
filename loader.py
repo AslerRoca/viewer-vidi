@@ -392,6 +392,9 @@ class LoaderWorker(QThread):
         self.headers_ready.emit(sd)
 
         if stype == SeriesType.S3DT:
+            # NIfTI loads the whole 4D array up front. We still iterate so that
+            # the receiver's per-timepoint loaded-mask gets populated and
+            # playback can advance — the array reference itself is shared.
             for t in range(n_t):
                 if self._cancel.is_set():
                     return
