@@ -4,3 +4,4 @@ nibabel
 pydicom
 Pillow
 matplotlib>=3.6
+SimpleITK

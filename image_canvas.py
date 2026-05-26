@@ -32,6 +32,7 @@ class ImageCanvas(QWidget):
     pixel_hovered       = pyqtSignal(int, int, float)
     tc_points_changed   = pyqtSignal(list)    # list of (ix, iy) image coords
     roi_tc_polys_changed = pyqtSignal(object) # list of np.ndarray each (N,2) image (x,y)
+    measurements_changed = pyqtSignal(list)   # list of (x1,y1,x2,y2) image coords
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -49,7 +50,14 @@ class ImageCanvas(QWidget):
         self._cmap_name: str = "Gray"
         self._aspect: float = 1.0
 
-        self._wl_mode: str = "drag"   # "drag" | "roi" | "roi_tc" | "tc"
+        self._wl_mode: str = "drag"   # "drag" | "roi" | "roi_tc" | "tc" | "measure"
+
+        # measurement state
+        self._meas_lines: list[tuple[float, float, float, float]] = []   # (x1,y1,x2,y2) in image coords
+        self._meas_drag: Optional[tuple[float, float, float, float]] = None  # in-progress line
+        self._row_mm: float = 1.0     # physical mm per row step in the displayed slice
+        self._col_mm: float = 1.0     # physical mm per column step in the displayed slice
+        self._scale_unit: str = "px"  # "mm" when a real physical scale is known, else "px"
 
         # drag-mode state
         self._drag_start: Optional[QPoint] = None
@@ -110,12 +118,31 @@ class ImageCanvas(QWidget):
         self.update()
 
     def set_wl_mode(self, mode: str) -> None:
-        """Switch between "drag", "roi", "roi_tc", and "tc" interaction modes."""
+        """Switch between "drag", "roi", "roi_tc", "tc", and "measure" modes."""
         self._wl_mode      = mode
         self._roi_start    = None
         self._roi_end      = None
         self._lasso_screen = []
-        self.setCursor(Qt.CrossCursor if mode in ("roi", "roi_tc", "tc") else Qt.ArrowCursor)
+        self._meas_drag    = None
+        self.setCursor(Qt.CrossCursor if mode in ("roi", "roi_tc", "tc", "measure") else Qt.ArrowCursor)
+        self.update()
+
+    def set_physical_scale(self, row_mm: float, col_mm: float, unit: str = "mm") -> None:
+        """Set the physical scale of the currently displayed slice.
+
+        row_mm = mm per pixel along the image's row (vertical) axis,
+        col_mm = mm per pixel along the column (horizontal) axis.
+        unit = "mm" if scale is real (DICOM/NIfTI), "px" if unknown (PNG/JPEG).
+        """
+        self._row_mm = float(row_mm) if row_mm > 0 else 1.0
+        self._col_mm = float(col_mm) if col_mm > 0 else 1.0
+        self._scale_unit = unit if unit in ("mm", "px") else "px"
+        self.update()
+
+    def clear_measurements(self) -> None:
+        self._meas_lines = []
+        self._meas_drag  = None
+        self.measurements_changed.emit([])
         self.update()
 
     def clear_roi_tc_polys(self) -> None:
@@ -206,6 +233,14 @@ class ImageCanvas(QWidget):
             pts = [QPoint(x, y) for x, y in self._lasso_screen]
             painter.drawPolyline(QPolygon(pts))
 
+        # Measurement lines (always drawn so they persist when switching modes)
+        if self._meas_lines or self._meas_drag is not None:
+            painter.setFont(QFont("Segoe UI", 8, QFont.Bold))
+            for i, line in enumerate(self._meas_lines):
+                self._draw_measurement(painter, line, TC_COLORS[i % len(TC_COLORS)])
+            if self._meas_drag is not None:
+                self._draw_measurement(painter, self._meas_drag, "#ffffff", dashed=True)
+
         # TC point markers (always drawn when points exist)
         if self._tc_points:
             painter.setFont(QFont("Segoe UI", 7, QFont.Bold))
@@ -243,6 +278,10 @@ class ImageCanvas(QWidget):
                 self._lasso_screen = [(event.x(), event.y())]
             elif self._wl_mode == "tc":
                 self._tc_handle_click(event.pos())
+            elif self._wl_mode == "measure":
+                ix, iy = self._image_coords(event.x(), event.y())
+                self._meas_drag = (ix, iy, ix, iy)
+                self.update()
         elif event.button() == Qt.RightButton:
             self._right_press   = event.pos()
             self._pan_at_press  = (self._pan_x, self._pan_y)
@@ -267,6 +306,11 @@ class ImageCanvas(QWidget):
                 if abs(event.x() - lx) > 3 or abs(event.y() - ly) > 3:
                     self._lasso_screen.append((event.x(), event.y()))
                     self.update()
+            elif self._wl_mode == "measure" and self._meas_drag is not None:
+                ix, iy = self._image_coords(event.x(), event.y())
+                x1, y1, _, _ = self._meas_drag
+                self._meas_drag = (x1, y1, ix, iy)
+                self.update()
             # TC mode: no drag action (clicks only)
 
         if event.buttons() & Qt.RightButton and self._right_press is not None:
@@ -298,12 +342,27 @@ class ImageCanvas(QWidget):
                 self.update()
             elif self._wl_mode == "roi_tc":
                 self._finish_lasso()
+            elif self._wl_mode == "measure":
+                if self._meas_drag is not None and self._pixels is not None:
+                    x1, y1, x2, y2 = self._meas_drag
+                    h, w = self._pixels.shape
+                    # Reject zero-length or degenerate clicks
+                    if abs(x2 - x1) + abs(y2 - y1) >= 2:
+                        # Clamp endpoints to the image rectangle
+                        x1 = max(0, min(w - 1, x1)); x2 = max(0, min(w - 1, x2))
+                        y1 = max(0, min(h - 1, y1)); y2 = max(0, min(h - 1, y2))
+                        self._meas_lines.append((x1, y1, x2, y2))
+                        self.measurements_changed.emit(list(self._meas_lines))
+                    self._meas_drag = None
+                    self.update()
         elif event.button() == Qt.RightButton:
             if not self._right_dragged and self._right_press is not None:
                 if self._wl_mode == "tc":
                     self._tc_handle_right(self._right_press)
                 elif self._wl_mode == "roi_tc":
                     self._roi_tc_remove_nearest(self._right_press)
+                elif self._wl_mode == "measure":
+                    self._meas_remove_nearest(self._right_press)
             self._right_press   = None
             self._right_dragged = False
 
@@ -422,6 +481,67 @@ class ImageCanvas(QWidget):
         idx = min(range(len(self._roi_tc_polys)), key=lambda i: centroid_dist(self._roi_tc_polys[i]))
         self._roi_tc_polys.pop(idx)
         self.roi_tc_polys_changed.emit(list(self._roi_tc_polys))
+        self.update()
+
+    # ── Measurement helpers ────────────────────────────────────────────────────
+
+    def _measurement_length(self, line: tuple[float, float, float, float]) -> float:
+        """Return physical length of a measurement line in current scale units."""
+        x1, y1, x2, y2 = line
+        dx_mm = (x2 - x1) * self._col_mm
+        dy_mm = (y2 - y1) * self._row_mm
+        return float(np.hypot(dx_mm, dy_mm))
+
+    def _format_length(self, length: float) -> str:
+        if self._scale_unit == "mm":
+            return f"{length:.1f} mm" if length >= 1.0 else f"{length*10:.2f} mm"
+        return f"{length:.1f} px"
+
+    def _draw_measurement(self, painter: QPainter,
+                          line: tuple[float, float, float, float],
+                          color_str: str, dashed: bool = False) -> None:
+        x1, y1, x2, y2 = line
+        sx1, sy1 = self._screen_coords(int(round(x1)), int(round(y1)))
+        sx2, sy2 = self._screen_coords(int(round(x2)), int(round(y2)))
+        c = QColor(color_str)
+        style = Qt.DashLine if dashed else Qt.SolidLine
+        painter.setPen(QPen(c, 2, style))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawLine(sx1, sy1, sx2, sy2)
+        # Endpoint marks (small filled circles)
+        r = 3
+        painter.setBrush(c)
+        painter.setPen(QPen(c, 1))
+        painter.drawEllipse(sx1 - r, sy1 - r, r * 2, r * 2)
+        painter.drawEllipse(sx2 - r, sy2 - r, r * 2, r * 2)
+        # Length label near midpoint, nudged perpendicular to the line
+        length = self._measurement_length(line)
+        text = self._format_length(length)
+        mx = (sx1 + sx2) // 2
+        my = (sy1 + sy2) // 2
+        ddx = sx2 - sx1
+        ddy = sy2 - sy1
+        n = max(1.0, (ddx * ddx + ddy * ddy) ** 0.5)
+        ox = int(-ddy / n * 10)
+        oy = int( ddx / n * 10)
+        painter.setPen(c)
+        painter.drawText(mx + ox + 2, my + oy, text)
+
+    def _meas_remove_nearest(self, pos: QPoint) -> None:
+        """Right-click in measure mode: remove the line whose screen-space midpoint is nearest."""
+        if not self._meas_lines:
+            return
+        sx, sy = pos.x(), pos.y()
+        def mid_dist(line):
+            x1, y1, x2, y2 = line
+            sx1, sy1 = self._screen_coords(int(round(x1)), int(round(y1)))
+            sx2, sy2 = self._screen_coords(int(round(x2)), int(round(y2)))
+            mx = (sx1 + sx2) / 2
+            my = (sy1 + sy2) / 2
+            return (mx - sx) ** 2 + (my - sy) ** 2
+        idx = min(range(len(self._meas_lines)), key=lambda i: mid_dist(self._meas_lines[i]))
+        self._meas_lines.pop(idx)
+        self.measurements_changed.emit(list(self._meas_lines))
         self.update()
 
     def _apply_roi_wl(self) -> None:

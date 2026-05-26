@@ -22,6 +22,7 @@ from .constants import DATA_ROOT, BADGE_COLORS
 from . import drag_state
 
 _NIFTI_EXTS = (".nii.gz", ".nii")
+_MHD_EXTS    = (".mhd", ".mha")
 _IMAGE_EXTS  = frozenset({".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"})
 
 
@@ -43,6 +44,13 @@ def _make_series_meta(path: str) -> "SeriesMeta | GroupedSeriesMeta | None":
                 series_name=os.path.basename(path),
                 study_name=os.path.basename(os.path.dirname(path)),
                 n_files=1, file_format="nifti",
+            )
+        if any(nl.endswith(e) for e in _MHD_EXTS):
+            return SeriesMeta(
+                study_dir=os.path.dirname(path), series_dir=path,
+                series_name=os.path.basename(path),
+                study_name=os.path.basename(os.path.dirname(path)),
+                n_files=1, file_format="mhd",
             )
         if os.path.splitext(nl)[1] in _IMAGE_EXTS:
             return SeriesMeta(
@@ -76,6 +84,14 @@ def _make_series_meta(path: str) -> "SeriesMeta | GroupedSeriesMeta | None":
         return SeriesMeta(
             study_dir=path, series_dir=fp, series_name=nii[0],
             study_name=os.path.basename(path), n_files=1, file_format="nifti",
+        )
+
+    mhd = sorted(f for f in files if any(f.lower().endswith(e) for e in _MHD_EXTS))
+    if mhd:
+        fp = os.path.join(path, mhd[0])
+        return SeriesMeta(
+            study_dir=path, series_dir=fp, series_name=mhd[0],
+            study_name=os.path.basename(path), n_files=1, file_format="mhd",
         )
 
     imgs = [f for f in files if os.path.splitext(f.lower())[1] in _IMAGE_EXTS]

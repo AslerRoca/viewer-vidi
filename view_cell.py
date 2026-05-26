@@ -120,6 +120,14 @@ class ViewCell(QWidget):
         self._roi_tc_btn.setVisible(False)
         self._roi_tc_btn.toggled.connect(self._on_roi_tc_mode_toggled)
 
+        self._meas_btn = QPushButton("MEAS")
+        self._meas_btn.setObjectName("roiModeBtn")
+        self._meas_btn.setCheckable(True)
+        self._meas_btn.setToolTip(
+            "Measure: drag to draw a caliper line; right-click removes the nearest line."
+        )
+        self._meas_btn.toggled.connect(self._on_meas_mode_toggled)
+
         self._series_lbl = QLabel("")
         self._series_lbl.setObjectName("cellSeriesLabel")
         self._series_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -133,6 +141,7 @@ class ViewCell(QWidget):
         h_lay.addWidget(self._roi_btn)
         h_lay.addWidget(self._tc_btn)
         h_lay.addWidget(self._roi_tc_btn)
+        h_lay.addWidget(self._meas_btn)
         h_lay.addStretch(1)
         h_lay.addWidget(self._series_lbl)
 
@@ -240,9 +249,13 @@ class ViewCell(QWidget):
         self._roi_tc_btn.setChecked(False)
         self._roi_tc_btn.setVisible(False)
         self._roi_tc_btn.blockSignals(False)
+        self._meas_btn.blockSignals(True)
+        self._meas_btn.setChecked(False)
+        self._meas_btn.blockSignals(False)
         self._canvas.set_wl_mode("drag")
         self._canvas.clear_tc_points()
         self._canvas.clear_roi_tc_polys()
+        self._canvas.clear_measurements()
         if self._tc_window is not None:
             self._tc_window.clear_roi_data()
             self._tc_window.hide()
@@ -350,7 +363,30 @@ class ViewCell(QWidget):
             return
         sl, asp = self._extract_slice()
         self._canvas.set_image(sl, asp, reset_view=False)
+        self._push_physical_scale()
         self._canvas.set_label("")
+
+    def _push_physical_scale(self) -> None:
+        """Tell the canvas mm-per-pixel for the currently displayed slice."""
+        sd = self._sd
+        if sd is None:
+            return
+        unit = "px" if sd.meta.file_format == "image" else "mm"
+        row_mm, col_mm = sd.pixel_spacing
+        st = sd.series_type
+        if st in (SeriesType.S2D, SeriesType.S2DT, SeriesType.MULTI):
+            self._canvas.set_physical_scale(row_mm, col_mm, unit)
+            return
+        # 3D / 3D-T: MPR reformat planes substitute slice_spacing along one axis
+        acq  = sd.acq_plane if sd.acq_plane in _VIEWS else "AXIAL"
+        axis = _AXIS.get((acq, self._view_mode), "z")
+        dz = sd.slice_spacing if sd.slice_spacing > 0 else 1.0
+        if axis == "z":
+            self._canvas.set_physical_scale(row_mm, col_mm, unit)
+        elif axis == "y":
+            self._canvas.set_physical_scale(dz, col_mm, unit)
+        else:  # "x"
+            self._canvas.set_physical_scale(dz, row_mm, unit)
 
     def _extract_slice(self) -> tuple[np.ndarray, float]:
         sd  = self._sd
@@ -417,6 +453,7 @@ class ViewCell(QWidget):
             self._cur_y = value
         else:
             self._cur_x = value
+        self._canvas.clear_measurements()
         self._render()
         if self._tc_window is not None and self._tc_window.isVisible():
             self._tc_window.update_slice(self._cur_z, self._cur_y, self._cur_x)
@@ -429,18 +466,17 @@ class ViewCell(QWidget):
         # Check if this timepoint is loaded (for streaming 3DT)
         if self._loaded_mask is not None and not self._loaded_mask[value]:
             return
+        self._canvas.clear_measurements()
         self._render()
 
     # ── W/L / ROI / TC mode toggles ───────────────────────────────────────
 
     def _on_roi_mode_toggled(self, checked: bool) -> None:
         if checked:
-            self._tc_btn.blockSignals(True)
-            self._tc_btn.setChecked(False)
-            self._tc_btn.blockSignals(False)
-            self._roi_tc_btn.blockSignals(True)
-            self._roi_tc_btn.setChecked(False)
-            self._roi_tc_btn.blockSignals(False)
+            for other in (self._tc_btn, self._roi_tc_btn, self._meas_btn):
+                other.blockSignals(True)
+                other.setChecked(False)
+                other.blockSignals(False)
             if self._tc_window is not None:
                 self._tc_window.hide()
             self._canvas.set_wl_mode("roi")
@@ -449,12 +485,10 @@ class ViewCell(QWidget):
 
     def _on_tc_mode_toggled(self, checked: bool) -> None:
         if checked:
-            self._roi_btn.blockSignals(True)
-            self._roi_btn.setChecked(False)
-            self._roi_btn.blockSignals(False)
-            self._roi_tc_btn.blockSignals(True)
-            self._roi_tc_btn.setChecked(False)
-            self._roi_tc_btn.blockSignals(False)
+            for other in (self._roi_btn, self._roi_tc_btn, self._meas_btn):
+                other.blockSignals(True)
+                other.setChecked(False)
+                other.blockSignals(False)
             self._canvas.set_wl_mode("tc")
             self._ensure_tc_window()
         else:
@@ -462,14 +496,24 @@ class ViewCell(QWidget):
             if self._tc_window is not None:
                 self._tc_window.hide()
 
+    def _on_meas_mode_toggled(self, checked: bool) -> None:
+        if checked:
+            for other in (self._roi_btn, self._tc_btn, self._roi_tc_btn):
+                other.blockSignals(True)
+                other.setChecked(False)
+                other.blockSignals(False)
+            if self._tc_window is not None:
+                self._tc_window.hide()
+            self._canvas.set_wl_mode("measure")
+        else:
+            self._canvas.set_wl_mode("drag")
+
     def _on_roi_tc_mode_toggled(self, checked: bool) -> None:
         if checked:
-            self._roi_btn.blockSignals(True)
-            self._roi_btn.setChecked(False)
-            self._roi_btn.blockSignals(False)
-            self._tc_btn.blockSignals(True)
-            self._tc_btn.setChecked(False)
-            self._tc_btn.blockSignals(False)
+            for other in (self._roi_btn, self._tc_btn, self._meas_btn):
+                other.blockSignals(True)
+                other.setChecked(False)
+                other.blockSignals(False)
             self._canvas.set_wl_mode("roi_tc")
             self._ensure_tc_window()
         else:
@@ -592,6 +636,7 @@ class ViewCell(QWidget):
                     self._cur_y = depth // 2
                 else:
                     self._cur_x = depth // 2
+        self._canvas.clear_measurements()
         self._render()
         if self._tc_window is not None and self._tc_window.isVisible():
             self._on_tc_points_changed(self._canvas.tc_points())

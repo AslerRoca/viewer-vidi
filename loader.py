@@ -97,6 +97,8 @@ class LoaderWorker(QThread):
                 fmt = getattr(meta, "file_format", "dicom")
                 if fmt == "nifti":
                     self._run_nifti_load(meta)
+                elif fmt == "mhd":
+                    self._run_mhd_load(meta)
                 elif fmt == "image":
                     self._run_image_load(meta)
                 else:
@@ -395,6 +397,75 @@ class LoaderWorker(QThread):
             # NIfTI loads the whole 4D array up front. We still iterate so that
             # the receiver's per-timepoint loaded-mask gets populated and
             # playback can advance — the array reference itself is shared.
+            for t in range(n_t):
+                if self._cancel.is_set():
+                    return
+                self.pixels_ready.emit(t, arr)
+                self.progress.emit(t + 1, n_t)
+        else:
+            self.pixels_ready.emit(0, arr)
+
+        if not self._cancel.is_set():
+            self.load_complete.emit()
+
+    # ── MetaImage (.mhd / .mha) ───────────────────────────────────────────────
+
+    def _run_mhd_load(self, meta: SeriesMeta) -> None:
+        try:
+            import SimpleITK as sitk
+        except ImportError:
+            self.load_error.emit("SimpleITK not installed — run: pip install SimpleITK")
+            return
+
+        try:
+            img = sitk.ReadImage(meta.series_dir)
+        except Exception as e:
+            self.load_error.emit(f"Failed to load MHD: {e}")
+            return
+
+        arr = sitk.GetArrayFromImage(img).astype(np.float32)
+        ndim = arr.ndim
+
+        # SimpleITK array layout: 2D → (Y, X); 3D → (Z, Y, X); 4D → (T, Z, Y, X)
+        # GetSpacing() returns (X, Y[, Z[, T]]).
+        spacing = list(img.GetSpacing())
+        if ndim == 2:
+            stype = SeriesType.S2D
+            H, W = arr.shape
+            n_z, n_t = 1, 1
+            px_col = float(spacing[0]) if len(spacing) > 0 else 1.0
+            px_row = float(spacing[1]) if len(spacing) > 1 else 1.0
+            sl_sp  = 0.0
+        elif ndim == 3:
+            stype = SeriesType.S3D
+            n_z, H, W = arr.shape
+            n_t = 1
+            px_col = float(spacing[0]) if len(spacing) > 0 else 1.0
+            px_row = float(spacing[1]) if len(spacing) > 1 else 1.0
+            sl_sp  = float(spacing[2]) if len(spacing) > 2 else 1.0
+        elif ndim == 4:
+            stype = SeriesType.S3DT
+            n_t, n_z, H, W = arr.shape
+            px_col = float(spacing[0]) if len(spacing) > 0 else 1.0
+            px_row = float(spacing[1]) if len(spacing) > 1 else 1.0
+            sl_sp  = float(spacing[2]) if len(spacing) > 2 else 1.0
+        else:
+            self.load_error.emit(f"Unsupported MHD shape: {arr.shape}")
+            return
+
+        sample = arr.ravel()[::max(1, arr.size // 10000)]
+        wc, ww = wl_from_percentiles(sample)
+        meta.series_type = stype
+
+        sd = _make_plain_sd(meta, stype, rows=H, cols=W, n_z=n_z, n_t=n_t,
+                            wc=wc, ww=ww,
+                            pixel_spacing=(px_row, px_col), slice_spacing=sl_sp)
+
+        if self._cancel.is_set():
+            return
+        self.headers_ready.emit(sd)
+
+        if stype == SeriesType.S3DT:
             for t in range(n_t):
                 if self._cancel.is_set():
                     return
