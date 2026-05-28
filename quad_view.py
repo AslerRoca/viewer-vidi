@@ -79,6 +79,10 @@ class QuadView(QWidget):
         for c in self._cells:
             c.set_colormap(name)
 
+    def set_hu_offset(self, offset: float) -> None:
+        for c in self._cells:
+            c.set_hu_offset(offset)
+
     def reset_wl(self) -> None:
         self._active.reset_wl()
 

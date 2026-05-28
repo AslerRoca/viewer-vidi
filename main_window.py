@@ -6,6 +6,7 @@ from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QMainWindow, QSplitter, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QComboBox, QDoubleSpinBox, QStatusBar, QShortcut,
+    QInputDialog, QMessageBox,
 )
 
 from .constants import TREE_WIDTH, STYLE_PATH, BADGE_COLORS
@@ -14,6 +15,7 @@ from .data_model import SeriesMeta, GroupedSeriesMeta
 from .tree_panel import StudyTreeWidget
 from .quad_view import QuadView
 from .view_cell import ViewCell
+from . import presets as wl_presets
 
 
 class MainWindow(QMainWindow):
@@ -42,6 +44,24 @@ class MainWindow(QMainWindow):
         cmap_lbl = QLabel("Colormap")
         cmap_lbl.setStyleSheet("color: #6c7086;")
 
+        preset_lbl = QLabel("Preset")
+        preset_lbl.setStyleSheet("color: #6c7086;")
+
+        self._preset_combo = QComboBox()
+        self._preset_combo.setMinimumContentsLength(12)
+        self._preset_combo.setToolTip(
+            "Apply a Window/Level preset to the active panel."
+        )
+        self._rebuild_preset_combo()
+
+        self._preset_save_btn = QPushButton("+")
+        self._preset_save_btn.setFixedWidth(24)
+        self._preset_save_btn.setToolTip("Save current C/W as a new preset")
+        self._preset_delete_btn = QPushButton("−")
+        self._preset_delete_btn.setFixedWidth(24)
+        self._preset_delete_btn.setToolTip("Delete the selected custom preset")
+        self._preset_delete_btn.setEnabled(False)
+
         self._wc_spin = QDoubleSpinBox()
         self._wc_spin.setRange(-100000, 100000)
         self._wc_spin.setValue(2048)
@@ -61,6 +81,19 @@ class MainWindow(QMainWindow):
         reset_btn = QPushButton("Reset W/L")
         reset_btn.clicked.connect(self._reset_wl)
 
+        self._hu_offset_spin = QDoubleSpinBox()
+        self._hu_offset_spin.setRange(-100000, 100000)
+        self._hu_offset_spin.setValue(0)
+        self._hu_offset_spin.setPrefix("HU offset: ")
+        self._hu_offset_spin.setDecimals(0)
+        self._hu_offset_spin.setSingleStep(1024)
+        self._hu_offset_spin.setFixedWidth(150)
+        self._hu_offset_spin.setToolTip(
+            "Additive offset applied to MetaImage (.mhd/.mha) volumes that lost "
+            "their DICOM RescaleIntercept during conversion. Set e.g. -4096 to map "
+            "stored values back to Hounsfield units, then W/L presets work."
+        )
+
         self._type_badge = QLabel("")
         self._type_badge.setObjectName("typeLabel")
         self._type_badge.setMinimumWidth(50)
@@ -70,9 +103,14 @@ class MainWindow(QMainWindow):
         tb_lay.setSpacing(10)
         tb_lay.addWidget(cmap_lbl)
         tb_lay.addWidget(self._cmap_combo)
+        tb_lay.addWidget(preset_lbl)
+        tb_lay.addWidget(self._preset_combo)
+        tb_lay.addWidget(self._preset_save_btn)
+        tb_lay.addWidget(self._preset_delete_btn)
         tb_lay.addWidget(self._wc_spin)
         tb_lay.addWidget(self._ww_spin)
         tb_lay.addWidget(reset_btn)
+        tb_lay.addWidget(self._hu_offset_spin)
         tb_lay.addStretch(1)
         tb_lay.addWidget(self._type_badge)
 
@@ -137,6 +175,11 @@ class MainWindow(QMainWindow):
         self._cmap_combo.currentTextChanged.connect(self._quad.set_colormap)
         self._wc_spin.valueChanged.connect(self._on_toolbar_wl)
         self._ww_spin.valueChanged.connect(self._on_toolbar_wl)
+        self._preset_combo.activated.connect(self._on_preset_selected)
+        self._preset_combo.currentIndexChanged.connect(self._on_preset_index_changed)
+        self._preset_save_btn.clicked.connect(self._on_preset_save)
+        self._preset_delete_btn.clicked.connect(self._on_preset_delete)
+        self._hu_offset_spin.valueChanged.connect(self._quad.set_hu_offset)
 
     def _load_stylesheet(self) -> None:
         try:
@@ -201,6 +244,76 @@ class MainWindow(QMainWindow):
 
     def _reset_wl(self) -> None:
         self._quad.reset_wl()
+
+    # ── W/L presets ───────────────────────────────────────────────────────
+
+    def _rebuild_preset_combo(self) -> None:
+        """Populate the preset combo with built-ins followed by user-saved presets.
+
+        Items carry (wc, ww, is_custom) in their userData; selection starts at
+        -1 so picking the first item still fires `activated`.
+        """
+        cb = self._preset_combo
+        cb.blockSignals(True)
+        cb.clear()
+        for name, wc, ww in wl_presets.BUILTIN_PRESETS:
+            cb.addItem(name, (float(wc), float(ww), False))
+        custom = wl_presets.load_custom_presets()
+        if custom:
+            cb.insertSeparator(cb.count())
+            for name, wc, ww in custom:
+                cb.addItem(name, (float(wc), float(ww), True))
+        cb.setCurrentIndex(-1)
+        cb.blockSignals(False)
+        if hasattr(self, "_preset_delete_btn"):
+            self._preset_delete_btn.setEnabled(False)
+
+    def _on_preset_selected(self, idx: int) -> None:
+        data = self._preset_combo.itemData(idx)
+        if not data:
+            return
+        wc, ww, _is_custom = data
+        self._sync_wl_spins(wc, ww)
+        self._quad.set_wl(wc, ww)
+
+    def _on_preset_index_changed(self, idx: int) -> None:
+        data = self._preset_combo.itemData(idx)
+        self._preset_delete_btn.setEnabled(bool(data) and bool(data[2]))
+
+    def _on_preset_save(self) -> None:
+        wc = self._wc_spin.value()
+        ww = self._ww_spin.value()
+        name, ok = QInputDialog.getText(
+            self, "Save W/L preset",
+            f"Name for preset (C={wc:.0f}, W={ww:.0f}):",
+        )
+        name = name.strip()
+        if not (ok and name):
+            return
+        builtin_names = {n for n, *_ in wl_presets.BUILTIN_PRESETS}
+        if name in builtin_names:
+            QMessageBox.information(
+                self, "Save W/L preset",
+                f"\"{name}\" is a built-in preset name. Pick a different name.",
+            )
+            return
+        custom = [p for p in wl_presets.load_custom_presets() if p[0] != name]
+        custom.append((name, float(wc), float(ww)))
+        wl_presets.save_custom_presets(custom)
+        self._rebuild_preset_combo()
+        new_idx = self._preset_combo.findText(name)
+        if new_idx >= 0:
+            self._preset_combo.setCurrentIndex(new_idx)
+
+    def _on_preset_delete(self) -> None:
+        idx = self._preset_combo.currentIndex()
+        data = self._preset_combo.itemData(idx)
+        if not data or not data[2]:
+            return
+        name = self._preset_combo.currentText()
+        custom = [p for p in wl_presets.load_custom_presets() if p[0] != name]
+        wl_presets.save_custom_presets(custom)
+        self._rebuild_preset_combo()
 
     def _show_type_badge(self, type_str: str) -> None:
         color = BADGE_COLORS.get(type_str, "#cdd6f4")

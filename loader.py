@@ -57,6 +57,29 @@ def _make_plain_sd(meta: SeriesMeta, stype: SeriesType,
     )
 
 
+def _mhd_rescale(img) -> tuple[float, float]:
+    """Read RescaleSlope / RescaleIntercept from a SimpleITK image's metadata.
+
+    MetaImage has no standard rescale field, but ITK-based tools (Slicer,
+    ITK-Snap, nnU-Net) often copy the DICOM tags through. Returns (1.0, 0.0)
+    when nothing usable is present.
+    """
+    keys = set(img.GetMetaDataKeys())
+
+    def _get(*names: str, default: float) -> float:
+        for n in names:
+            if n in keys:
+                try:
+                    return float(img.GetMetaData(n))
+                except (ValueError, TypeError):
+                    continue
+        return default
+
+    slope     = _get("RescaleSlope",     "0028|1053", default=1.0)
+    intercept = _get("RescaleIntercept", "0028|1052", default=0.0)
+    return slope, intercept
+
+
 class LoaderWorker(QThread):
     """Two-phase loader: headers first, then pixels timepoint by timepoint."""
 
@@ -71,6 +94,10 @@ class LoaderWorker(QThread):
         self._cancel  = threading.Event()
         self._meta    = None
         self._grouped = False
+        self._hu_offset = 0.0   # manual additive HU offset for MHD volumes
+
+    def set_hu_offset(self, offset: float) -> None:
+        self._hu_offset = float(offset)
 
     def request_load(self, meta) -> None:
         self._cancel.set()
@@ -372,11 +399,13 @@ class LoaderWorker(QThread):
             self.load_error.emit(f"Unsupported NIfTI shape: {data.shape}")
             return
 
-        # Spacing from header
+        # Spacing from header. nibabel's get_zooms() returns spacing in file-storage
+        # axis order (X, Y, Z); after the (2,1,0) transpose above the array is
+        # (Z, Y, X), so row = Y, col = X.
         try:
             zooms = img.header.get_zooms()
-            px_row = float(zooms[0]) if len(zooms) > 0 else 1.0
-            px_col = float(zooms[1]) if len(zooms) > 1 else 1.0
+            px_col = float(zooms[0]) if len(zooms) > 0 else 1.0
+            px_row = float(zooms[1]) if len(zooms) > 1 else 1.0
             sl_sp  = float(zooms[2]) if len(zooms) > 2 else 1.0
         except Exception:
             px_row = px_col = sl_sp = 1.0
@@ -426,6 +455,15 @@ class LoaderWorker(QThread):
         arr = sitk.GetArrayFromImage(img).astype(np.float32)
         ndim = arr.ndim
 
+        # MetaImage carries no rescale by default. Apply file metadata when
+        # present, then the user's manual HU offset (for files that lost their
+        # DICOM RescaleIntercept during conversion).
+        slope, intercept = _mhd_rescale(img)
+        if slope != 1.0 or intercept != 0.0:
+            arr = arr * slope + intercept
+        if self._hu_offset != 0.0:
+            arr = arr + self._hu_offset
+
         # SimpleITK array layout: 2D → (Y, X); 3D → (Z, Y, X); 4D → (T, Z, Y, X)
         # GetSpacing() returns (X, Y[, Z[, T]]).
         spacing = list(img.GetSpacing())
@@ -444,6 +482,8 @@ class LoaderWorker(QThread):
             px_row = float(spacing[1]) if len(spacing) > 1 else 1.0
             sl_sp  = float(spacing[2]) if len(spacing) > 2 else 1.0
         elif ndim == 4:
+            # Untested — 4D MHDs are rare in practice; SimpleITK's spacing[3]
+            # (time step) is dropped.
             stype = SeriesType.S3DT
             n_t, n_z, H, W = arr.shape
             px_col = float(spacing[0]) if len(spacing) > 0 else 1.0

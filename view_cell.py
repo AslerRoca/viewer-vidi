@@ -6,7 +6,7 @@ from PyQt5.QtCore import Qt, QTimer, QEvent, pyqtSignal
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QSlider, QLabel, QDoubleSpinBox,
-    QSizePolicy, QStackedWidget,
+    QSizePolicy, QStackedWidget, QMenu,
 )
 
 from .image_canvas import ImageCanvas
@@ -58,6 +58,8 @@ class ViewCell(QWidget):
         self._sd:           SeriesData | None = None
         self._vol:          np.ndarray | None = None
         self._loaded_mask:  np.ndarray | None = None
+        self._last_meta = None        # remembered for reload on HU-offset change
+        self._hu_offset: float = 0.0
         self._view_mode:    str  = "AXIAL"
         self._cur_z:        int  = 0
         self._cur_y:        int  = 0
@@ -124,9 +126,12 @@ class ViewCell(QWidget):
         self._meas_btn.setObjectName("roiModeBtn")
         self._meas_btn.setCheckable(True)
         self._meas_btn.setToolTip(
-            "Measure: drag to draw a caliper line; right-click removes the nearest line."
+            "Measure: drag to draw a caliper line; right-click on the canvas removes "
+            "the nearest line; right-click this button to clear all."
         )
         self._meas_btn.toggled.connect(self._on_meas_mode_toggled)
+        self._meas_btn.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._meas_btn.customContextMenuRequested.connect(self._on_meas_btn_context_menu)
 
         self._series_lbl = QLabel("")
         self._series_lbl.setObjectName("cellSeriesLabel")
@@ -265,7 +270,16 @@ class ViewCell(QWidget):
         self._canvas_stack.setCurrentIndex(1)
         self._canvas.set_image(None)
         self._set_controls_visible(False, False)
+        self._last_meta = meta
+        self._loader.set_hu_offset(self._hu_offset)
         self._loader.request_load(meta)
+
+    def set_hu_offset(self, offset: float) -> None:
+        """Set the manual HU offset; reload if the current series is an MHD."""
+        self._hu_offset = float(offset)
+        meta = self._last_meta
+        if meta is not None and getattr(meta, "file_format", "") == "mhd":
+            self.load_meta(meta)
 
     def set_wl(self, wc: float, ww: float) -> None:
         self._canvas.set_wl(wc, ww)
@@ -507,6 +521,12 @@ class ViewCell(QWidget):
             self._canvas.set_wl_mode("measure")
         else:
             self._canvas.set_wl_mode("drag")
+
+    def _on_meas_btn_context_menu(self, pos) -> None:
+        menu = QMenu(self._meas_btn)
+        act = menu.addAction("Clear all measurements")
+        act.triggered.connect(self._canvas.clear_measurements)
+        menu.exec_(self._meas_btn.mapToGlobal(pos))
 
     def _on_roi_tc_mode_toggled(self, checked: bool) -> None:
         if checked:

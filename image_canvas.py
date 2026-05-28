@@ -32,6 +32,8 @@ class ImageCanvas(QWidget):
     pixel_hovered       = pyqtSignal(int, int, float)
     tc_points_changed   = pyqtSignal(list)    # list of (ix, iy) image coords
     roi_tc_polys_changed = pyqtSignal(object) # list of np.ndarray each (N,2) image (x,y)
+    # Emitted on add/remove/clear. No subscribers yet — kept as the anchor for
+    # a future "export measurements" feature in the time-course / report side.
     measurements_changed = pyqtSignal(list)   # list of (x1,y1,x2,y2) image coords
 
     def __init__(self, parent=None):
@@ -279,7 +281,7 @@ class ImageCanvas(QWidget):
             elif self._wl_mode == "tc":
                 self._tc_handle_click(event.pos())
             elif self._wl_mode == "measure":
-                ix, iy = self._image_coords(event.x(), event.y())
+                ix, iy = self._image_coords_f(event.x(), event.y())
                 self._meas_drag = (ix, iy, ix, iy)
                 self.update()
         elif event.button() == Qt.RightButton:
@@ -307,7 +309,7 @@ class ImageCanvas(QWidget):
                     self._lasso_screen.append((event.x(), event.y()))
                     self.update()
             elif self._wl_mode == "measure" and self._meas_drag is not None:
-                ix, iy = self._image_coords(event.x(), event.y())
+                ix, iy = self._image_coords_f(event.x(), event.y())
                 x1, y1, _, _ = self._meas_drag
                 self._meas_drag = (x1, y1, ix, iy)
                 self.update()
@@ -345,12 +347,9 @@ class ImageCanvas(QWidget):
             elif self._wl_mode == "measure":
                 if self._meas_drag is not None and self._pixels is not None:
                     x1, y1, x2, y2 = self._meas_drag
-                    h, w = self._pixels.shape
-                    # Reject zero-length or degenerate clicks
-                    if abs(x2 - x1) + abs(y2 - y1) >= 2:
-                        # Clamp endpoints to the image rectangle
-                        x1 = max(0, min(w - 1, x1)); x2 = max(0, min(w - 1, x2))
-                        y1 = max(0, min(h - 1, y1)); y2 = max(0, min(h - 1, y2))
+                    # Endpoints are already clamped to the image by _image_coords_f;
+                    # reject degenerate sub-pixel clicks where no real line was drawn.
+                    if abs(x2 - x1) + abs(y2 - y1) >= 1.0:
                         self._meas_lines.append((x1, y1, x2, y2))
                         self.measurements_changed.emit(list(self._meas_lines))
                     self._meas_drag = None
@@ -388,6 +387,26 @@ class ImageCanvas(QWidget):
         img_h = self._qimage.height()
         ix = int((wx - r.x()) * img_w / r.width())
         iy = int((wy - r.y()) * img_h / r.height())
+        return ix, iy
+
+    def _image_coords_f(self, wx: int, wy: int) -> tuple[float, float]:
+        """Same as _image_coords but returns sub-pixel floats clamped to the image rect.
+
+        Used by the measurement tool so that short lines on highly-zoomed views
+        retain precision and so that the in-progress drag preview never reports
+        coordinates outside the image when the cursor wanders off the canvas.
+        """
+        if self._qimage is None:
+            return 0.0, 0.0
+        r = self._dest_rect()
+        if r.width() == 0 or r.height() == 0:
+            return 0.0, 0.0
+        img_w = self._qimage.width()
+        img_h = self._qimage.height()
+        ix = (wx - r.x()) * img_w / r.width()
+        iy = (wy - r.y()) * img_h / r.height()
+        ix = max(0.0, min(float(img_w - 1), ix))
+        iy = max(0.0, min(float(img_h - 1), iy))
         return ix, iy
 
     def _screen_coords(self, ix: int, iy: int) -> tuple[int, int]:
@@ -494,7 +513,7 @@ class ImageCanvas(QWidget):
 
     def _format_length(self, length: float) -> str:
         if self._scale_unit == "mm":
-            return f"{length:.1f} mm" if length >= 1.0 else f"{length*10:.2f} mm"
+            return f"{length:.2f} mm" if length < 10.0 else f"{length:.1f} mm"
         return f"{length:.1f} px"
 
     def _draw_measurement(self, painter: QPainter,
@@ -514,7 +533,8 @@ class ImageCanvas(QWidget):
         painter.setPen(QPen(c, 1))
         painter.drawEllipse(sx1 - r, sy1 - r, r * 2, r * 2)
         painter.drawEllipse(sx2 - r, sy2 - r, r * 2, r * 2)
-        # Length label near midpoint, nudged perpendicular to the line
+        # Length label near midpoint, nudged perpendicular to the line.
+        # A semi-transparent black pill keeps the text readable over bright pixels.
         length = self._measurement_length(line)
         text = self._format_length(length)
         mx = (sx1 + sx2) // 2
@@ -524,22 +544,42 @@ class ImageCanvas(QWidget):
         n = max(1.0, (ddx * ddx + ddy * ddy) ** 0.5)
         ox = int(-ddy / n * 10)
         oy = int( ddx / n * 10)
+        fm = painter.fontMetrics()
+        tw = fm.horizontalAdvance(text)
+        th = fm.height()
+        tx = mx + ox + 2
+        ty = my + oy
+        bg_rect = QRect(tx - 2, ty - fm.ascent() - 1, tw + 4, th + 2)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(0, 0, 0, 160))
+        painter.drawRoundedRect(bg_rect, 2, 2)
         painter.setPen(c)
-        painter.drawText(mx + ox + 2, my + oy, text)
+        painter.drawText(tx, ty, text)
 
     def _meas_remove_nearest(self, pos: QPoint) -> None:
-        """Right-click in measure mode: remove the line whose screen-space midpoint is nearest."""
+        """Right-click in measure mode: remove the line nearest to the click point.
+
+        Uses point-to-segment distance in screen space so clicking directly *on*
+        a line removes that line — not whichever other line happens to have a
+        closer midpoint.
+        """
         if not self._meas_lines:
             return
         sx, sy = pos.x(), pos.y()
-        def mid_dist(line):
+        def seg_dist(line):
             x1, y1, x2, y2 = line
             sx1, sy1 = self._screen_coords(int(round(x1)), int(round(y1)))
             sx2, sy2 = self._screen_coords(int(round(x2)), int(round(y2)))
-            mx = (sx1 + sx2) / 2
-            my = (sy1 + sy2) / 2
-            return (mx - sx) ** 2 + (my - sy) ** 2
-        idx = min(range(len(self._meas_lines)), key=lambda i: mid_dist(self._meas_lines[i]))
+            vx, vy = sx2 - sx1, sy2 - sy1
+            wx, wy = sx - sx1, sy - sy1
+            denom = vx * vx + vy * vy
+            if denom <= 0:
+                return wx * wx + wy * wy
+            t = max(0.0, min(1.0, (wx * vx + wy * vy) / denom))
+            px = sx1 + t * vx
+            py = sy1 + t * vy
+            return (px - sx) ** 2 + (py - sy) ** 2
+        idx = min(range(len(self._meas_lines)), key=lambda i: seg_dist(self._meas_lines[i]))
         self._meas_lines.pop(idx)
         self.measurements_changed.emit(list(self._meas_lines))
         self.update()
