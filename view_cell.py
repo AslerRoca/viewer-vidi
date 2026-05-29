@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 
 import numpy as np
-from PyQt5.QtCore import Qt, QTimer, QEvent, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, QEvent, QRect, pyqtSignal
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QSlider, QLabel, QDoubleSpinBox,
@@ -56,6 +56,19 @@ class ViewCell(QWidget):
     double_clicked = pyqtSignal()          # request fullscreen toggle
     overlays_changed = pyqtSignal()        # mask overlay list changed → refresh panel
     status_message = pyqtSignal(str)       # transient status-bar message
+
+    # Mask drop zone styling (Catppuccin mauve). "Idle" = drag in progress but
+    # cursor outside the zone; "hot" = cursor inside → drop here attaches a mask.
+    _MASK_ZONE_IDLE = (
+        "#maskDropZone { background-color: rgba(203,166,247,0.25);"
+        " border: 2px dashed #cba6f7; border-radius: 6px;"
+        " color: #cdd6f4; font-weight: bold; font-size: 13px; }"
+    )
+    _MASK_ZONE_HOT = (
+        "#maskDropZone { background-color: rgba(203,166,247,0.55);"
+        " border: 2px solid #cba6f7; border-radius: 6px;"
+        " color: #ffffff; font-weight: bold; font-size: 14px; }"
+    )
 
     def __init__(self, cell_index: int, parent=None):
         super().__init__(parent)
@@ -238,6 +251,17 @@ class ViewCell(QWidget):
         root.addWidget(self._header)
         root.addWidget(self._canvas_stack, 1)
         root.addWidget(self._bottom_bar)
+
+        # ── Mask drop zone (upper-right; shown only while a file is dragged) ──
+        # A file dropped inside this zone is attached as a mask overlay; dropped
+        # anywhere else it loads/replaces the series. Free-floating (not in the
+        # layout) and transparent to the mouse so it never blocks interaction.
+        self._mask_zone = QLabel("Mask", self)
+        self._mask_zone.setObjectName("maskDropZone")
+        self._mask_zone.setAlignment(Qt.AlignCenter)
+        self._mask_zone.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self._mask_zone.setStyleSheet(self._MASK_ZONE_IDLE)
+        self._mask_zone.hide()
 
     def _make_view_btn(self, text: str) -> QPushButton:
         btn = QPushButton(text)
@@ -883,33 +907,81 @@ class ViewCell(QWidget):
     def dragEnterEvent(self, event) -> None:
         if event.mimeData().hasFormat(drag_state.MIME_TYPE):
             event.acceptProposedAction()
+            self._show_mask_zone(event.pos())
         else:
             event.ignore()
 
     def dragMoveEvent(self, event) -> None:
         event.acceptProposedAction()
+        # Brighten the zone while the cursor hovers inside it.
+        hot = self._in_mask_zone(event.pos())
+        self._mask_zone.setStyleSheet(self._MASK_ZONE_HOT if hot else self._MASK_ZONE_IDLE)
+
+    def dragLeaveEvent(self, event) -> None:
+        self._mask_zone.hide()
 
     def dropEvent(self, event) -> None:
+        in_zone = self._mask_zone.isVisible() and self._in_mask_zone(event.pos())
+        self._mask_zone.hide()
         meta = drag_state.get_payload()
         drag_state.clear_payload()
+        event.acceptProposedAction()
         if meta is None:
-            event.acceptProposedAction()
             return
-        # Drop onto a loaded base adds an overlay when the dragged item is a
-        # label file (by name) or Shift is held; otherwise it replaces the series.
         name = getattr(meta, "series_name", "") or ""
+        fmt  = getattr(meta, "file_format", "")
+        path = getattr(meta, "series_dir", "") or ""
+
+        if in_zone:
+            # Explicit "treat as mask" gesture — no name-token / Shift heuristic.
+            if self._vol is None:
+                self.status_message.emit("Load an image into this panel before dropping a mask.")
+            elif fmt not in ("mhd", "nifti") or not os.path.isfile(path):
+                self.status_message.emit(f"'{name}' is not a single MHD/NIfTI label file — cannot add as mask.")
+            else:
+                self.add_mask_from_path(path, name)
+            self.activated.emit()
+            return
+
+        # Dropped outside the zone: keep the legacy heuristic (label by name or
+        # Shift adds an overlay; otherwise the series is loaded / replaced).
         as_overlay = (
             self._vol is not None
-            and getattr(meta, "file_format", "") in ("mhd", "nifti")
+            and fmt in ("mhd", "nifti")
             and (bool(event.keyboardModifiers() & Qt.ShiftModifier)
                  or any(tok in name.lower() for tok in _MASK_TOKENS))
         )
         if as_overlay:
-            self.add_mask_from_path(getattr(meta, "series_dir", ""), name)
+            self.add_mask_from_path(path, name)
         else:
             self.load_meta(meta)
         self.activated.emit()
-        event.acceptProposedAction()
+
+    # ── Mask drop zone geometry ─────────────────────────────────────────────
+
+    def _mask_zone_rect(self):
+        """Upper-right rectangle, just below the header bar."""
+        margin = 6
+        w = max(80, min(180, int(self.width() * 0.35)))
+        h = max(44, min(90, int(self.height() * 0.20)))
+        x = self.width() - w - margin
+        y = self._header.height() + margin
+        return QRect(x, y, w, h)
+
+    def _in_mask_zone(self, pos) -> bool:
+        return self._mask_zone_rect().contains(pos)
+
+    def _show_mask_zone(self, pos) -> None:
+        self._mask_zone.setGeometry(self._mask_zone_rect())
+        hot = self._in_mask_zone(pos)
+        self._mask_zone.setStyleSheet(self._MASK_ZONE_HOT if hot else self._MASK_ZONE_IDLE)
+        self._mask_zone.show()
+        self._mask_zone.raise_()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self._mask_zone.isVisible():
+            self._mask_zone.setGeometry(self._mask_zone_rect())
 
     # ── Mouse events ───────────────────────────────────────────────────────
 
