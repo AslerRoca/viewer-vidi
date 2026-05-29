@@ -6,7 +6,7 @@ from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QMainWindow, QSplitter, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QComboBox, QDoubleSpinBox, QStatusBar, QShortcut,
-    QInputDialog, QMessageBox,
+    QInputDialog, QMessageBox, QDockWidget,
 )
 
 from .constants import TREE_WIDTH, STYLE_PATH, BADGE_COLORS
@@ -15,6 +15,7 @@ from .data_model import SeriesMeta, GroupedSeriesMeta
 from .tree_panel import StudyTreeWidget
 from .quad_view import QuadView
 from .view_cell import ViewCell
+from .overlays_panel import OverlaysPanel
 from . import presets as wl_presets
 
 
@@ -160,6 +161,15 @@ class MainWindow(QMainWindow):
         root_lay.addWidget(self._splitter, 1)
         self.setCentralWidget(central)
 
+        # ── Overlays dock (mask controls for the active panel) ──────────────
+        self._overlays_panel = OverlaysPanel()
+        dock = QDockWidget("Overlays", self)
+        dock.setObjectName("overlaysDock")
+        dock.setWidget(self._overlays_panel)
+        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        self.addDockWidget(Qt.RightDockWidgetArea, dock)
+        self._overlays_dock = dock
+
     def _connect_signals(self) -> None:
         QShortcut(QKeySequence("Ctrl+B"), self).activated.connect(self._toggle_sidebar)
 
@@ -170,6 +180,12 @@ class MainWindow(QMainWindow):
         self._quad.active_cell_changed.connect(self._on_active_cell_changed)
         self._quad.wl_changed.connect(self._on_viewer_wl)
         self._quad.pixel_hovered.connect(self._on_pixel_hovered)
+
+        # Per-cell overlay + status signals
+        for cell in self._quad._cells:
+            cell.overlays_changed.connect(self._on_overlays_changed)
+            cell.status_message.connect(self._on_status_message)
+        self._overlays_panel.set_cell(self._quad.active_cell())
 
         # Toolbar → quad
         self._cmap_combo.currentTextChanged.connect(self._quad.set_colormap)
@@ -224,6 +240,15 @@ class MainWindow(QMainWindow):
         else:
             self._type_badge.setText("")
         cell.refresh_tc_panel()
+        self._overlays_panel.set_cell(cell)
+
+    def _on_overlays_changed(self) -> None:
+        sender = self.sender()
+        if sender is self._quad.active_cell():
+            self._overlays_panel.refresh()
+
+    def _on_status_message(self, msg: str) -> None:
+        self.statusBar().showMessage(msg, 6000)
 
     def _on_viewer_wl(self, wc: float, ww: float) -> None:
         self._sync_wl_spins(wc, ww)

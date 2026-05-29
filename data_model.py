@@ -76,6 +76,21 @@ class VolumeData:
     loaded_mask:  np.ndarray           = field(default_factory=lambda: np.zeros(0, bool))
 
 
+@dataclass
+class MaskOverlay:
+    """A segmentation label volume overlaid on the base series.
+
+    `volume` is an integer label map voxel-aligned with the base volume.
+    `label_colors` maps each nonzero label value to an (r, g, b) 0–255 tuple.
+    """
+    name:         str
+    volume:       np.ndarray                       # int labels, (Z,Y,X) / (H,W)
+    label_colors: dict                             # int label → (r, g, b)
+    visible:      bool  = True
+    opacity:      float = 0.35
+    mode:         str   = "fill"                   # "fill" | "outline"
+
+
 # ─── Detection helpers ────────────────────────────────────────────────────────
 
 def acq_plane_info(iop: list[float]) -> dict:

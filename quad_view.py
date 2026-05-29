@@ -89,6 +89,7 @@ class QuadView(QWidget):
     def cancel_all(self) -> None:
         for c in self._cells:
             c._loader.cancel()
+            c._mask_loader.cancel()
 
     def is_fullscreen(self) -> bool:
         return self._fs_cell is not None

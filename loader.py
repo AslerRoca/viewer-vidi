@@ -885,6 +885,65 @@ class LoaderWorker(QThread):
             return arr
 
 
+class MaskLoaderWorker(QThread):
+    """Loads segmentation label volumes as integer arrays for overlay use.
+
+    Unlike LoaderWorker, masks get no Hounsfield offset, no W/L, and keep their
+    integer label values. The array layout mirrors the base loader per format
+    (SimpleITK (Z,Y,X) for MHD; (2,1,0) transpose for NIfTI) so masks line up
+    voxel-for-voxel with the displayed volume.
+    """
+
+    mask_ready = pyqtSignal(str, object, object)   # (name, int volume, [label values])
+    mask_error = pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._cancel = threading.Event()
+        self._items: list[tuple[str, str]] = []   # [(path, display_name), ...]
+
+    def request_load(self, items: list[tuple[str, str]]) -> None:
+        self._cancel.set()
+        self.wait()
+        self._cancel.clear()
+        self._items = list(items)
+        self.start()
+
+    def cancel(self) -> None:
+        self._cancel.set()
+        self.wait()
+
+    def run(self) -> None:
+        for path, name in self._items:
+            if self._cancel.is_set():
+                return
+            try:
+                vol = self._load_label_volume(path)
+            except Exception as exc:
+                if not self._cancel.is_set():
+                    self.mask_error.emit(f"Failed to load mask '{name}': {exc}")
+                continue
+            if vol is None or self._cancel.is_set():
+                continue
+            labels = [int(v) for v in np.unique(vol) if v != 0]
+            self.mask_ready.emit(name, vol, labels)
+
+    def _load_label_volume(self, path: str) -> Optional[np.ndarray]:
+        nl = path.lower()
+        if nl.endswith(_NIFTI_EXTS):
+            import nibabel as nib
+            data = np.asarray(nib.load(path).dataobj)
+            if data.ndim == 3:
+                data = np.transpose(data, (2, 1, 0))     # (Z, Y, X) — match base
+            elif data.ndim >= 4:
+                data = np.transpose(data[..., 0], (2, 1, 0))
+            return np.rint(data).astype(np.int32)
+        # MHD / MetaImage (default)
+        import SimpleITK as sitk
+        arr = sitk.GetArrayFromImage(sitk.ReadImage(path))   # (Z, Y, X)
+        return np.rint(arr).astype(np.int32)
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _pil_to_float(img) -> np.ndarray:

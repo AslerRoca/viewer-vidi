@@ -20,6 +20,21 @@ TC_COLORS = [
 _MARKER_R = 6   # marker radius in screen pixels
 
 
+def _boundary(mask: np.ndarray) -> np.ndarray:
+    """Return the 1-px inner boundary of a boolean region (4-connectivity).
+
+    A pixel is on the boundary if it's inside the region but has at least one
+    4-neighbour outside it. Image-edge pixels are not forced to be boundary, so
+    regions that run off-screen don't get a line drawn along the frame.
+    """
+    b = np.zeros_like(mask)
+    b[:-1, :] |= mask[:-1, :] & ~mask[1:, :]
+    b[1:, :]  |= mask[1:, :]  & ~mask[:-1, :]
+    b[:, :-1] |= mask[:, :-1] & ~mask[:, 1:]
+    b[:, 1:]  |= mask[:, 1:]  & ~mask[:, :-1]
+    return b
+
+
 class ImageCanvas(QWidget):
     """Displays a single 2-D float32 image slice via QPainter.
 
@@ -53,6 +68,9 @@ class ImageCanvas(QWidget):
         self._aspect: float = 1.0
 
         self._wl_mode: str = "drag"   # "drag" | "roi" | "roi_tc" | "tc" | "measure"
+
+        # mask overlays: list of (label_slice, label_colors, opacity, mode)
+        self._overlays: list[tuple] = []
 
         # measurement state
         self._meas_lines: list[tuple[float, float, float, float]] = []   # (x1,y1,x2,y2) in image coords
@@ -141,6 +159,16 @@ class ImageCanvas(QWidget):
         self._scale_unit = unit if unit in ("mm", "px") else "px"
         self.update()
 
+    def set_overlays(self, overlays: list) -> None:
+        """Set mask overlays to composite over the base image.
+
+        Each item is (label_slice, label_colors, opacity, mode) where
+        label_slice is an int 2-D array aligned with the displayed slice,
+        label_colors maps label→(r,g,b), and mode is "fill" or "outline".
+        """
+        self._overlays = overlays or []
+        self._rebuild()
+
     def clear_measurements(self) -> None:
         self._meas_lines = []
         self._meas_drag  = None
@@ -173,10 +201,34 @@ class ImageCanvas(QWidget):
             return
         cmap = COLORMAPS[self._cmap_name]
         src  = self._pixels_gpu if self._pixels_gpu is not None else self._pixels
-        self._rgb_buf = render_to_rgb(src, self._wc, self._ww, cmap)
+        rgb  = render_to_rgb(src, self._wc, self._ww, cmap)
+        if self._overlays:
+            rgb = self._composite_overlays(rgb)
+        self._rgb_buf = np.ascontiguousarray(rgb)
         h, w = self._rgb_buf.shape[:2]
         self._qimage = QImage(self._rgb_buf.data, w, h, w * 3, QImage.Format_RGB888)
         self.update()
+
+    def _composite_overlays(self, rgb: np.ndarray) -> np.ndarray:
+        """Blend mask overlays onto a base RGB (H,W,3) uint8 buffer (CPU)."""
+        out = rgb.astype(np.float32)
+        base_h, base_w = out.shape[:2]
+        for label_slice, label_colors, opacity, mode in self._overlays:
+            if label_slice is None or label_slice.shape != (base_h, base_w):
+                continue
+            a = float(max(0.0, min(1.0, opacity)))
+            for lbl, color in label_colors.items():
+                region = label_slice == lbl
+                if not region.any():
+                    continue
+                if mode == "outline":
+                    region = _boundary(region)
+                    blend = 1.0   # crisp lines, full opacity
+                else:
+                    blend = a
+                col = np.asarray(color, dtype=np.float32)
+                out[region] = out[region] * (1.0 - blend) + col * blend
+        return np.clip(out, 0, 255).astype(np.uint8)
 
     def _dest_rect(self) -> QRect:
         """Compute where the image is drawn inside the widget (accounts for zoom/pan)."""

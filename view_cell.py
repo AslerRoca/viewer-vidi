@@ -1,6 +1,8 @@
 """Single panel cell for the 4-panel quad view."""
 from __future__ import annotations
 
+import os
+
 import numpy as np
 from PyQt5.QtCore import Qt, QTimer, QEvent, pyqtSignal
 from PyQt5.QtWidgets import (
@@ -10,9 +12,10 @@ from PyQt5.QtWidgets import (
 )
 
 from .image_canvas import ImageCanvas
-from .loader import LoaderWorker
-from .data_model import SeriesData, SeriesType
+from .loader import LoaderWorker, MaskLoaderWorker
+from .data_model import SeriesData, SeriesType, MaskOverlay
 from .constants import DEFAULT_FPS, MAX_FPS
+from .mask_colors import color_for_label
 from . import drag_state
 
 
@@ -37,6 +40,10 @@ _AXIS = {
 
 _VIEWS = ("AXIAL", "CORONAL", "SAGITTAL")
 
+# Sibling files auto-detected as mask overlays for a loaded base volume.
+_MASK_EXTS   = (".mhd", ".mha", ".nii.gz", ".nii")
+_MASK_TOKENS = ("explabels", "label", "mask", "seg")
+
 
 class ViewCell(QWidget):
     """One panel in the 2×2 quad viewer.
@@ -47,6 +54,8 @@ class ViewCell(QWidget):
     wl_changed     = pyqtSignal(float, float)
     pixel_hovered  = pyqtSignal(int, int, float)
     double_clicked = pyqtSignal()          # request fullscreen toggle
+    overlays_changed = pyqtSignal()        # mask overlay list changed → refresh panel
+    status_message = pyqtSignal(str)       # transient status-bar message
 
     def __init__(self, cell_index: int, parent=None):
         super().__init__(parent)
@@ -60,6 +69,7 @@ class ViewCell(QWidget):
         self._loaded_mask:  np.ndarray | None = None
         self._last_meta = None        # remembered for reload on HU-offset change
         self._hu_offset: float = 0.0
+        self._overlays: list[MaskOverlay] = []   # mask overlays on the base volume
         self._view_mode:    str  = "AXIAL"
         self._cur_z:        int  = 0
         self._cur_y:        int  = 0
@@ -75,6 +85,10 @@ class ViewCell(QWidget):
         self._loader.pixels_ready.connect(self._on_pixels_ready)
         self._loader.load_complete.connect(self._on_load_complete)
         self._loader.progress.connect(self._on_progress)
+
+        self._mask_loader = MaskLoaderWorker()
+        self._mask_loader.mask_ready.connect(self._on_mask_ready)
+        self._mask_loader.mask_error.connect(self._on_mask_error)
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._advance_time)
@@ -237,6 +251,10 @@ class ViewCell(QWidget):
     def load_meta(self, meta) -> None:
         self._stop_playback()
         self._loader.cancel()
+        self._mask_loader.cancel()
+        self._overlays.clear()
+        self._canvas.set_overlays([])
+        self.overlays_changed.emit()
         self._sd   = None
         self._vol  = None
         self._loaded_mask = None
@@ -365,7 +383,84 @@ class ViewCell(QWidget):
             self._render()
 
     def _on_load_complete(self) -> None:
-        pass
+        self._auto_detect_masks()
+
+    # ── Mask overlays ────────────────────────────────────────────────────────
+
+    def _auto_detect_masks(self) -> None:
+        """Scan the base file's folder for sibling label maps and load them."""
+        meta = self._last_meta
+        if meta is None or self._vol is None:
+            return
+        base_path = getattr(meta, "series_dir", "")
+        if not base_path or not os.path.isfile(base_path):
+            return   # only file-based volumes (mhd/nii); DICOM dirs skipped in phase 1
+        folder    = os.path.dirname(base_path)
+        base_name = os.path.basename(base_path)
+        try:
+            entries = sorted(os.listdir(folder))
+        except OSError:
+            return
+        items = []
+        for f in entries:
+            if f == base_name:
+                continue
+            nl = f.lower()
+            if nl.endswith(_MASK_EXTS) and any(tok in nl for tok in _MASK_TOKENS):
+                items.append((os.path.join(folder, f), f))
+        if items:
+            self._mask_loader.request_load(items)
+
+    def add_mask_from_path(self, path: str, name: str | None = None) -> None:
+        """Explicitly load a label file as an overlay (e.g. dragged onto the cell)."""
+        if self._vol is None or not os.path.isfile(path):
+            return
+        self._mask_loader.request_load([(path, name or os.path.basename(path))])
+
+    def _on_mask_ready(self, name: str, vol: np.ndarray, labels: list) -> None:
+        if self._vol is None:
+            return
+        if vol.shape != self._vol.shape:
+            self.status_message.emit(
+                f"Mask '{name}': shape {tuple(vol.shape)} ≠ base {tuple(self._vol.shape)} — skipped"
+            )
+            return
+        short  = self._truncate(name, 28)
+        if any(ov.name == short for ov in self._overlays):
+            return   # already attached
+        # Offset palette by labels already in use so colors stay distinct across masks.
+        offset = sum(len(ov.label_colors) for ov in self._overlays)
+        colors = {lbl: color_for_label(lbl, offset + i) for i, lbl in enumerate(labels)}
+        self._overlays.append(MaskOverlay(name=short, volume=vol, label_colors=colors))
+        self._render()
+        self.overlays_changed.emit()
+
+    def _on_mask_error(self, msg: str) -> None:
+        self.status_message.emit(msg)
+
+    def overlays(self) -> list[MaskOverlay]:
+        return self._overlays
+
+    def set_overlay_visible(self, idx: int, visible: bool) -> None:
+        if 0 <= idx < len(self._overlays):
+            self._overlays[idx].visible = visible
+            self._render()
+
+    def set_overlay_opacity(self, idx: int, opacity: float) -> None:
+        if 0 <= idx < len(self._overlays):
+            self._overlays[idx].opacity = max(0.0, min(1.0, opacity))
+            self._render()
+
+    def set_overlay_mode(self, idx: int, mode: str) -> None:
+        if 0 <= idx < len(self._overlays) and mode in ("fill", "outline"):
+            self._overlays[idx].mode = mode
+            self._render()
+
+    def remove_overlay(self, idx: int) -> None:
+        if 0 <= idx < len(self._overlays):
+            self._overlays.pop(idx)
+            self._render()
+            self.overlays_changed.emit()
 
     def _on_progress(self, loaded: int, total: int) -> None:
         self._canvas.set_label(f"{loaded}/{total}")
@@ -378,7 +473,20 @@ class ViewCell(QWidget):
         sl, asp = self._extract_slice()
         self._canvas.set_image(sl, asp, reset_view=False)
         self._push_physical_scale()
+        self._push_overlays()
         self._canvas.set_label("")
+
+    def _push_overlays(self) -> None:
+        """Extract each visible overlay's current slice and hand them to the canvas."""
+        slices = []
+        for ov in self._overlays:
+            if not ov.visible or self._vol is None:
+                continue
+            if ov.volume.shape != self._vol.shape:
+                continue   # validated at attach; defensive guard for live changes
+            msl, _ = self._extract_slice_from(ov.volume)
+            slices.append((msl, ov.label_colors, ov.opacity, ov.mode))
+        self._canvas.set_overlays(slices)
 
     def _push_physical_scale(self) -> None:
         """Tell the canvas mm-per-pixel for the currently displayed slice."""
@@ -403,8 +511,13 @@ class ViewCell(QWidget):
             self._canvas.set_physical_scale(dz, row_mm, unit)
 
     def _extract_slice(self) -> tuple[np.ndarray, float]:
+        return self._extract_slice_from(self._vol)
+
+    def _extract_slice_from(self, vol: np.ndarray) -> tuple[np.ndarray, float]:
+        """Cut the currently-displayed 2-D slice from *vol* using the active
+        view-mode / slice indices / flips. Used for the base volume and for any
+        voxel-aligned mask overlay so they stay in lockstep."""
         sd  = self._sd
-        vol = self._vol
         st  = sd.series_type
 
         if st == SeriesType.S2D:
@@ -779,9 +892,23 @@ class ViewCell(QWidget):
     def dropEvent(self, event) -> None:
         meta = drag_state.get_payload()
         drag_state.clear_payload()
-        if meta is not None:
+        if meta is None:
+            event.acceptProposedAction()
+            return
+        # Drop onto a loaded base adds an overlay when the dragged item is a
+        # label file (by name) or Shift is held; otherwise it replaces the series.
+        name = getattr(meta, "series_name", "") or ""
+        as_overlay = (
+            self._vol is not None
+            and getattr(meta, "file_format", "") in ("mhd", "nifti")
+            and (bool(event.keyboardModifiers() & Qt.ShiftModifier)
+                 or any(tok in name.lower() for tok in _MASK_TOKENS))
+        )
+        if as_overlay:
+            self.add_mask_from_path(getattr(meta, "series_dir", ""), name)
+        else:
             self.load_meta(meta)
-            self.activated.emit()
+        self.activated.emit()
         event.acceptProposedAction()
 
     # ── Mouse events ───────────────────────────────────────────────────────

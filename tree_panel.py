@@ -24,6 +24,8 @@ from . import drag_state
 _NIFTI_EXTS = (".nii.gz", ".nii")
 _MHD_EXTS    = (".mhd", ".mha")
 _IMAGE_EXTS  = frozenset({".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"})
+# Binary backing files for MetaImage headers — not independently loadable.
+_HIDDEN_EXTS = (".zraw", ".raw")
 
 
 # ── Series-meta helpers ────────────────────────────────────────────────────────
@@ -292,6 +294,8 @@ class _SmartProxy(QSortFilterProxyModel):
         idx  = self.sourceModel().index(src_row, 0, src_parent)
         path = self.sourceModel().filePath(idx)
 
+        if path.lower().endswith(_HIDDEN_EXTS):
+            return False
         if path.lower().endswith(".dcm"):
             parent_path = os.path.dirname(path)
             return _dir_type_cache.get(parent_path) == "dicom"
