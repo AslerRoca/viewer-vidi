@@ -19,6 +19,7 @@ from PyQt5.QtWidgets import (
 
 from .data_model import SeriesMeta, GroupedSeriesMeta, SeriesType
 from .constants import DATA_ROOT, BADGE_COLORS
+from .dicom_sniff import has_dicm_magic, is_dicom_file, list_dicom_files, maybe_dicom_name
 from . import drag_state
 
 _NIFTI_EXTS = (".nii.gz", ".nii")
@@ -30,7 +31,7 @@ _IMAGE_EXTS  = frozenset({".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".we
 def _make_series_meta(path: str) -> "SeriesMeta | GroupedSeriesMeta | None":
     if os.path.isfile(path):
         nl = path.lower()
-        if nl.endswith(".dcm"):
+        if is_dicom_file(path):
             return SeriesMeta(
                 study_dir=os.path.dirname(path), series_dir=path,
                 series_name=os.path.basename(path),
@@ -61,7 +62,7 @@ def _make_series_meta(path: str) -> "SeriesMeta | GroupedSeriesMeta | None":
     except OSError:
         return None
 
-    dcm = [f for f in files if f.lower().endswith(".dcm")]
+    dcm = list_dicom_files(path, files)
     if dcm:
         return SeriesMeta(
             study_dir=os.path.dirname(path), series_dir=path,
@@ -104,10 +105,7 @@ def _make_grouped_meta(study_dir: str) -> "GroupedSeriesMeta | None":
     study_name = os.path.basename(study_dir)
     for name in subdirs:
         sp = os.path.join(study_dir, name)
-        try:
-            n = sum(1 for f in os.listdir(sp) if f.lower().endswith(".dcm"))
-        except OSError:
-            n = 0
+        n = len(list_dicom_files(sp))
         if n:
             series_list.append(SeriesMeta(
                 study_dir=study_dir,
@@ -153,8 +151,8 @@ def _make_grouped_from_paths(paths: list) -> "GroupedSeriesMeta | None":
             n_timepoints=len(series_list),
         )
 
-    # Individual .dcm files dragged → build a GroupedSeriesMeta, one file per timepoint
-    dcm_files = [p for p in sorted(paths) if os.path.isfile(p) and p.lower().endswith(".dcm")]
+    # Individual DICOM files dragged → build a GroupedSeriesMeta, one file per timepoint
+    dcm_files = [p for p in sorted(paths) if os.path.isfile(p) and is_dicom_file(p)]
     if dcm_files:
         study_dir = os.path.dirname(dcm_files[0])
         series_list = [
@@ -178,10 +176,7 @@ def _make_grouped_from_paths(paths: list) -> "GroupedSeriesMeta | None":
     for path in sorted(paths):
         if not os.path.isdir(path):
             continue
-        try:
-            n = sum(1 for f in os.listdir(path) if f.lower().endswith(".dcm"))
-        except OSError:
-            n = 0
+        n = len(list_dicom_files(path))
         if n == 0:
             continue
         if study_dir is None:
@@ -229,15 +224,24 @@ def _classify_dir_io(path: str) -> str:
     """Classify *path* by scanning its contents. Safe to call from any thread."""
     try:
         has_img = has_subdir = False
+        sniffed = 0
         with os.scandir(path) as it:
             for entry in it:
                 nl = entry.name.lower()
                 if nl.endswith(".dcm"):
                     return "dicom"
+                if entry.is_dir(follow_symlinks=False):
+                    has_subdir = True
+                    continue
+                # Extensionless file → probe for the DICM magic (CD/DVD-style
+                # exports); a few probes decide, series dirs are homogeneous.
+                if maybe_dicom_name(entry.name) and sniffed < 8:
+                    sniffed += 1
+                    if has_dicm_magic(entry.path):
+                        return "dicom"
+                    continue
                 if os.path.splitext(nl)[1] in _IMAGE_EXTS:
                     has_img = True
-                elif entry.is_dir(follow_symlinks=False):
-                    has_subdir = True
         return "image" if (has_img and not has_subdir) else "dir"
     except OSError:
         return "dir"

@@ -15,6 +15,7 @@ from .data_model import (
     SeriesMeta, SeriesData, SeriesType, VolumeData,
     GroupedSeriesMeta, detect_series_type, build_series_data,
 )
+from .dicom_sniff import list_dicom_files
 from .windowing import wl_from_dicom, wl_from_percentiles, apply_rescale
 
 _IMAGE_EXTS = frozenset({".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"})
@@ -110,11 +111,7 @@ class LoaderWorker(QThread):
     def _dcm_files(self, directory: str) -> list[str]:
         if os.path.isfile(directory):
             return [directory]
-        return sorted(
-            os.path.join(directory, f)
-            for f in os.listdir(directory)
-            if f.lower().endswith(".dcm")
-        )
+        return list_dicom_files(directory)
 
     def _parallel_read_headers(self, paths: list[str]) -> list[tuple[str, object]]:
         """Read DICOM headers in parallel using defer_size so pixel data stays lazy."""
@@ -197,7 +194,7 @@ class LoaderWorker(QThread):
     def _run_dicom_load(self, meta: SeriesMeta) -> None:
         files = self._dcm_files(meta.series_dir)
         if not files:
-            self.load_error.emit(f"No .dcm files in {meta.series_dir}")
+            self.load_error.emit(f"No DICOM files in {meta.series_dir}")
             return
 
         # Parallel header read; pixel data stays deferred on disk

@@ -19,7 +19,7 @@ Run from the research root on either platform — the script auto-detects macOS 
 ### Formats
 | Format | Extensions | Notes |
 |---|---|---|
-| DICOM | `.dcm` | Full header parsing, RescaleSlope/Intercept, multi-frame |
+| DICOM | `.dcm`, extensionless | Full header parsing, RescaleSlope/Intercept, multi-frame; extensionless files (DICOMDIR/CD exports) detected via DICM magic |
 | NIfTI | `.nii`, `.nii.gz` | 2D / 3D / 4D; voxel spacing from header |
 | Raster | `.png` `.jpg` `.jpeg` `.bmp` `.tiff` `.webp` | Grayscale or RGB→grey |
 
