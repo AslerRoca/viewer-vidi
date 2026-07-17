@@ -48,6 +48,10 @@ class ViewCell(QWidget):
     pixel_hovered  = pyqtSignal(int, int, float)
     double_clicked = pyqtSignal()          # request fullscreen toggle
 
+    # True when TiltWheelReader delivers tilt from the kernel device instead
+    # (Qt's X11 backend loses isolated horizontal detents — see tilt_evdev.py).
+    qt_tilt_suppressed: bool = False
+
     def __init__(self, cell_index: int, parent=None):
         super().__init__(parent)
         self.setObjectName("viewCell")
@@ -673,12 +677,15 @@ class ViewCell(QWidget):
         self._slice_slider.setValue(v)
 
     def _scroll_time(self, delta: int, wrap: bool = False) -> None:
+        self.step_time(-1 if delta > 0 else 1, wrap)
+
+    def step_time(self, steps: int, wrap: bool = False) -> None:
+        """Step the time axis by `steps` frames (+ forward / − backward)."""
         if self._sd is None:
             return
-        step = -1 if delta > 0 else 1
         lo = self._time_slider.minimum()
         hi = self._time_slider.maximum()
-        v = self._time_slider.value() + step
+        v = self._time_slider.value() + steps
         if wrap and hi > lo:
             v = lo + (v - lo) % (hi - lo + 1)
         else:
@@ -748,8 +755,11 @@ class ViewCell(QWidget):
                 tilt = event.angleDelta().x()
                 if tilt != 0 and abs(tilt) >= abs(delta):
                     # Horizontal wheel tilt (e.g. Logitech G502): scrub time,
-                    # wrapping at the ends like a cine loop.
-                    self._scroll_time(tilt, wrap=True)
+                    # wrapping at the ends like a cine loop. When the evdev
+                    # reader owns tilt input (Linux/X11, where Qt drops
+                    # isolated detents), consume but don't double-step.
+                    if not ViewCell.qt_tilt_suppressed:
+                        self._scroll_time(tilt, wrap=True)
                 elif modifiers & Qt.ControlModifier:
                     self._canvas.zoom_wheel(delta)
                 elif modifiers & Qt.ShiftModifier:

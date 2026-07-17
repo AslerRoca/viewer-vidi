@@ -33,7 +33,11 @@ Run from the research root on either platform — the script auto-detects macOS 
 ### Viewing modes (per panel)
 - **AX / COR / SAG** buttons — switch between axial, coronal, and sagittal planes (3D data)
 - **Scroll wheel** — step through slices; Shift+scroll steps through time
-- **Wheel tilt left/right** (e.g. Logitech G502) — scrub time backward/forward, wrapping at the ends like a cine loop
+- **Wheel tilt left/right** (e.g. Logitech G502) — scrub time backward/forward, wrapping at the ends like a cine loop.
+  On Linux/X11 the tilt is read directly from the kernel input device, because Qt 5 drops isolated
+  horizontal detents; this needs read access to `/dev/input/event*`:
+  `sudo usermod -aG input $USER` (log out/in once). Without it the viewer falls back to Qt wheel
+  events, where single tilt clicks may be swallowed (hold/fast tilts still work).
 - **Slice slider** (right edge) — scrub through slices
 - **Time bar** (bottom, hidden for static data) — play/pause, frame scrubbing, FPS control
 

@@ -4,13 +4,14 @@ from __future__ import annotations
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
-    QMainWindow, QSplitter, QWidget, QHBoxLayout, QVBoxLayout,
+    QApplication, QMainWindow, QSplitter, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QComboBox, QDoubleSpinBox, QStatusBar, QShortcut,
 )
 
 from .constants import TREE_WIDTH, STYLE_PATH, BADGE_COLORS
 from .colormaps import COLORMAP_NAMES
 from .data_model import SeriesMeta, GroupedSeriesMeta
+from .tilt_evdev import TiltWheelReader
 from .tree_panel import StudyTreeWidget
 from .quad_view import QuadView
 from .view_cell import ViewCell
@@ -138,6 +139,14 @@ class MainWindow(QMainWindow):
         self._wc_spin.valueChanged.connect(self._on_toolbar_wl)
         self._ww_spin.valueChanged.connect(self._on_toolbar_wl)
 
+        # Tilt wheel → time scrub via kernel evdev (Linux; Qt drops isolated
+        # horizontal detents on X11 — see tilt_evdev.py). Falls back to the
+        # Qt wheel path in ViewCell when the devices aren't readable.
+        self._tilt_reader = TiltWheelReader(self)
+        if self._tilt_reader.start():
+            ViewCell.qt_tilt_suppressed = True
+            self._tilt_reader.tilt_stepped.connect(self._on_tilt_stepped)
+
     def _load_stylesheet(self) -> None:
         try:
             import os as _os
@@ -184,6 +193,12 @@ class MainWindow(QMainWindow):
 
     def _on_viewer_wl(self, wc: float, ww: float) -> None:
         self._sync_wl_spins(wc, ww)
+
+    def _on_tilt_stepped(self, steps: int) -> None:
+        # evdev events are global — only scrub while the viewer is focused.
+        if QApplication.activeWindow() is None:
+            return
+        self._quad.active_cell().step_time(steps, wrap=True)
 
     def _sync_wl_spins(self, wc: float, ww: float) -> None:
         self._wc_spin.blockSignals(True)
