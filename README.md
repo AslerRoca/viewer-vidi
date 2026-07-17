@@ -33,6 +33,7 @@ Run from the research root on either platform — the script auto-detects macOS 
 ### Viewing modes (per panel)
 - **AX / COR / SAG** buttons — switch between axial, coronal, and sagittal planes (3D data)
 - **Scroll wheel** — step through slices; Shift+scroll steps through time
+- **Wheel tilt left/right** (e.g. Logitech G502) — scrub time backward/forward, wrapping at the ends like a cine loop
 - **Slice slider** (right edge) — scrub through slices
 - **Time bar** (bottom, hidden for static data) — play/pause, frame scrubbing, FPS control
 

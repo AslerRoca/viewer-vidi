@@ -672,12 +672,17 @@ class ViewCell(QWidget):
         v = max(self._slice_slider.minimum(), min(self._slice_slider.maximum(), v))
         self._slice_slider.setValue(v)
 
-    def _scroll_time(self, delta: int) -> None:
+    def _scroll_time(self, delta: int, wrap: bool = False) -> None:
         if self._sd is None:
             return
         step = -1 if delta > 0 else 1
+        lo = self._time_slider.minimum()
+        hi = self._time_slider.maximum()
         v = self._time_slider.value() + step
-        v = max(self._time_slider.minimum(), min(self._time_slider.maximum(), v))
+        if wrap and hi > lo:
+            v = lo + (v - lo) % (hi - lo + 1)
+        else:
+            v = max(lo, min(hi, v))
         self._time_slider.setValue(v)
 
     # ── Visibility helpers ─────────────────────────────────────────────────
@@ -740,7 +745,12 @@ class ViewCell(QWidget):
             elif t == QEvent.Wheel:
                 modifiers = event.modifiers()
                 delta = event.angleDelta().y()
-                if modifiers & Qt.ControlModifier:
+                tilt = event.angleDelta().x()
+                if tilt != 0 and abs(tilt) >= abs(delta):
+                    # Horizontal wheel tilt (e.g. Logitech G502): scrub time,
+                    # wrapping at the ends like a cine loop.
+                    self._scroll_time(tilt, wrap=True)
+                elif modifiers & Qt.ControlModifier:
                     self._canvas.zoom_wheel(delta)
                 elif modifiers & Qt.ShiftModifier:
                     self._scroll_time(delta)
