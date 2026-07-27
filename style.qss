@@ -15,7 +15,11 @@ QMainWindow, QDialog {
 /* ─── Splitter ───────────────────────────────────────────── */
 QSplitter::handle {
     background-color: #45475a;
-    width: 1px;
+    width: 3px;
+}
+
+QSplitter::handle:hover {
+    background-color: #7c8fbd;
 }
 
 /* ─── Tree Widget ─────────────────────────────────────────── */
@@ -159,6 +163,16 @@ QPushButton:pressed {
 QPushButton:disabled {
     color: #45475a;
     border-color: #313244;
+}
+
+QPushButton#sidebarBtn {
+    padding: 4px 0;
+    font-size: 14px;
+}
+
+QPushButton#sidebarBtn:checked {
+    color: #7c8fbd;
+    border-color: #7c8fbd;
 }
 
 QPushButton#playBtn {

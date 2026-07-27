@@ -36,6 +36,14 @@ class MainWindow(QMainWindow):
         toolbar.setObjectName("toolbar")
         toolbar.setFixedHeight(44)
 
+        self._sidebar_btn = QPushButton("☰")
+        self._sidebar_btn.setObjectName("sidebarBtn")
+        self._sidebar_btn.setCheckable(True)
+        self._sidebar_btn.setChecked(True)
+        self._sidebar_btn.setFixedWidth(32)
+        self._sidebar_btn.setToolTip("Show/hide the study list (Ctrl+B)")
+        self._sidebar_btn.toggled.connect(self._on_sidebar_btn)
+
         self._cmap_combo = QComboBox()
         self._cmap_combo.addItems(COLORMAP_NAMES)
         self._cmap_combo.setCurrentText("Gray")
@@ -69,6 +77,7 @@ class MainWindow(QMainWindow):
         tb_lay = QHBoxLayout(toolbar)
         tb_lay.setContentsMargins(12, 6, 12, 6)
         tb_lay.setSpacing(10)
+        tb_lay.addWidget(self._sidebar_btn)
         tb_lay.addWidget(cmap_lbl)
         tb_lay.addWidget(self._cmap_combo)
         tb_lay.addWidget(self._wc_spin)
@@ -89,6 +98,9 @@ class MainWindow(QMainWindow):
         self._splitter.addWidget(self._quad)
         self._splitter.setSizes([TREE_WIDTH, 1100])
         self._splitter.setStretchFactor(1, 1)
+        # Don't let a splitter drag collapse the tree to an invisible sliver —
+        # hiding goes through the ☰ button / Ctrl+B, which can bring it back.
+        self._splitter.setCollapsible(0, False)
         self._tree_width = TREE_WIDTH
 
         # ── Status bar ─────────────────────────────────────────────────────
@@ -234,6 +246,13 @@ class MainWindow(QMainWindow):
             self._tree.show()
             total = sum(self._splitter.sizes())
             self._splitter.setSizes([self._tree_width, total - self._tree_width])
+        self._sidebar_btn.blockSignals(True)
+        self._sidebar_btn.setChecked(self._tree.isVisible())
+        self._sidebar_btn.blockSignals(False)
+
+    def _on_sidebar_btn(self, checked: bool) -> None:
+        if checked != self._tree.isVisible():
+            self._toggle_sidebar()
 
     def closeEvent(self, event) -> None:
         self._quad.cancel_all()

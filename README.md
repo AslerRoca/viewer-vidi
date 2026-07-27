@@ -40,6 +40,13 @@ Run from the research root on either platform — the script auto-detects macOS 
   events, where single tilt clicks may be swallowed (hold/fast tilts still work).
 - **Slice slider** (right edge) — scrub through slices
 - **Time bar** (bottom, hidden for static data) — play/pause, frame scrubbing, FPS control
+- **DICOM info overlay** — **i** button in the panel header (or press **I** on the canvas):
+  shows curated header info in the image corners — patient/study (top-left), modality and
+  series/instance (top-right), geometry + current W/L (bottom-left), acquisition parameters
+  (bottom-right). Below those, collapsible groups (**Equipment / Plate / Staff / Image / IDs**) —
+  click a group title to expand its details; expansion state persists while scrubbing.
+  Follows the displayed file while scrubbing slices/time; for NIfTI and plain images it shows
+  the available geometry instead. Tag selection lives in `dicom_info.py`.
 
 ### Window / Level
 | Mode | How to activate | Interaction |
@@ -83,6 +90,7 @@ viewer_vidi/
 ├── loader.py             # LoaderWorker (QThread) — DICOM / NIfTI / image loading
 ├── windowing.py          # render_to_rgb, wl_from_percentiles, wl_from_dicom
 ├── colormaps.py          # precomputed uint8 LUT tables
+├── dicom_info.py         # curated DICOM header reads for the info overlay
 ├── image_canvas.py       # ImageCanvas — QPainter renderer, drag W/L, ROI W/L
 ├── view_cell.py          # ViewCell — one panel: canvas + controls + drag-drop
 ├── quad_view.py          # QuadView — 2×2 grid, fullscreen toggle, active tracking

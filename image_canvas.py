@@ -80,6 +80,15 @@ class ImageCanvas(QWidget):
 
         self._label: str = ""
 
+        # DICOM info overlay: (tl, tr, bl, br) text blocks, or None when off.
+        # The live W/L line is appended to bl at paint time so it never lags.
+        self._overlay: Optional[tuple[str, str, str, str]] = None
+        # Collapsible detail groups under br: [(title, [lines])]. Expanded
+        # titles persist across slices/series so the view keeps its shape.
+        self._ov_groups:       list[tuple[str, list[str]]] = []
+        self._ov_expanded:     set[str] = set()
+        self._ov_header_rects: list[tuple[QRect, str]] = []   # hit areas
+
     # ── Public API ─────────────────────────────────────────────────────────────
 
     def set_image(self, pixels: Optional[np.ndarray], aspect: float = 1.0,
@@ -107,6 +116,19 @@ class ImageCanvas(QWidget):
 
     def set_label(self, text: str) -> None:
         self._label = text
+        self.update()
+
+    def set_overlay(self, texts: Optional[tuple[str, str, str, str]],
+                    groups: Optional[list[tuple[str, list[str]]]] = None) -> None:
+        """Show (tl, tr, bl, br) corner text blocks, or None to hide.
+
+        groups: optional collapsible (title, lines) sections appended below
+        the br block; clicking a title toggles it open/closed.
+        """
+        self._overlay = texts
+        self._ov_groups = groups or []
+        if texts is None:
+            self._ov_header_rects = []
         self.update()
 
     def set_wl_mode(self, mode: str) -> None:
@@ -226,12 +248,82 @@ class ImageCanvas(QWidget):
             painter.drawText(self.rect().adjusted(6, 4, -6, -4),
                              Qt.AlignTop | Qt.AlignLeft, self._label)
 
+        if self._overlay is not None:
+            self._draw_overlay(painter)
+
         painter.end()
+
+    _OV_TEXT   = QColor(205, 214, 244, 230)   # TEXT from constants
+    _OV_ACCENT = QColor(124, 143, 189, 255)   # ACCENT — marks clickable headers
+    _OV_SHADOW = QColor(0, 0, 0, 190)
+
+    def _draw_overlay(self, painter: QPainter) -> None:
+        tl, tr, bl, br = self._overlay
+        bl = (bl + "\n" if bl else "") + f"W {self._ww:.0f} L {self._wc:.0f}"
+        rect = self.rect().adjusted(8, 6, -8, -6)
+        if self._label:
+            rect.setTop(rect.top() + 16)   # keep clear of the loading counter
+        painter.setFont(QFont("Segoe UI", 8))
+        for text, align in (
+            (tl, Qt.AlignTop    | Qt.AlignLeft),
+            (tr, Qt.AlignTop    | Qt.AlignRight),
+            (bl, Qt.AlignBottom | Qt.AlignLeft),
+        ):
+            if not text:
+                continue
+            painter.setPen(self._OV_SHADOW)               # shadow for contrast
+            painter.drawText(rect.translated(1, 1), align, text)
+            painter.setPen(self._OV_TEXT)
+            painter.drawText(rect, align, text)
+        self._draw_overlay_br(painter, rect, br)
+
+    def _draw_overlay_br(self, painter: QPainter, rect: QRect, br: str) -> None:
+        """Bottom-right column: static br lines, then collapsible groups.
+
+        Drawn line by line (unlike the other corners) so each group header
+        gets a recorded hit rect for click toggling.
+        """
+        lines: list[tuple[str, QColor, Optional[str]]] = []  # (text, color, toggle_title)
+        for ln in br.split("\n"):
+            if ln:
+                lines.append((ln, self._OV_TEXT, None))
+        for title, details in self._ov_groups:
+            expanded = title in self._ov_expanded
+            lines.append((("▾ " if expanded else "▸ ") + title,
+                          self._OV_ACCENT, title))
+            if expanded:
+                lines.extend((d, self._OV_TEXT, None) for d in details)
+
+        self._ov_header_rects = []
+        if not lines:
+            return
+        fm = painter.fontMetrics()
+        lh = fm.height()
+        y = rect.bottom() - len(lines) * lh
+        for text, color, toggle_title in lines:
+            w = fm.horizontalAdvance(text)
+            r = QRect(rect.right() - w, y, w, lh)
+            painter.setPen(self._OV_SHADOW)
+            painter.drawText(r.translated(1, 1), Qt.AlignRight | Qt.AlignVCenter, text)
+            painter.setPen(color)
+            painter.drawText(r, Qt.AlignRight | Qt.AlignVCenter, text)
+            if toggle_title is not None:
+                self._ov_header_rects.append((r.adjusted(-6, -2, 6, 2), toggle_title))
+            y += lh
 
     # ── Mouse interaction ──────────────────────────────────────────────────────
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton:
+            if self._overlay is not None:
+                for r, title in self._ov_header_rects:
+                    if r.contains(event.pos()):
+                        if title in self._ov_expanded:
+                            self._ov_expanded.discard(title)
+                        else:
+                            self._ov_expanded.add(title)
+                        self.update()
+                        return   # consume: don't start W/L drag / ROI / TC
             if self._wl_mode == "drag":
                 self._drag_start = event.pos()
                 self._drag_wc    = self._wc

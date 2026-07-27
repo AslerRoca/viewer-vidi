@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy, QStackedWidget,
 )
 
+from .dicom_info import corner_texts, detail_groups
 from .image_canvas import ImageCanvas
 from .loader import LoaderWorker
 from .data_model import SeriesData, SeriesType
@@ -124,6 +125,12 @@ class ViewCell(QWidget):
         self._roi_tc_btn.setVisible(False)
         self._roi_tc_btn.toggled.connect(self._on_roi_tc_mode_toggled)
 
+        self._info_btn = QPushButton("i")
+        self._info_btn.setObjectName("roiModeBtn")
+        self._info_btn.setCheckable(True)
+        self._info_btn.setToolTip("DICOM info overlay: show header details for the displayed image (I)")
+        self._info_btn.toggled.connect(self._on_info_toggled)
+
         self._series_lbl = QLabel("")
         self._series_lbl.setObjectName("cellSeriesLabel")
         self._series_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -137,6 +144,7 @@ class ViewCell(QWidget):
         h_lay.addWidget(self._roi_btn)
         h_lay.addWidget(self._tc_btn)
         h_lay.addWidget(self._roi_tc_btn)
+        h_lay.addWidget(self._info_btn)
         h_lay.addStretch(1)
         h_lay.addWidget(self._series_lbl)
 
@@ -255,6 +263,7 @@ class ViewCell(QWidget):
         self._series_lbl.setText(self._truncate(name, 28))
         self._canvas_stack.setCurrentIndex(1)
         self._canvas.set_image(None)
+        self._canvas.set_overlay(None)
         self._set_controls_visible(False, False)
         self._loader.request_load(meta)
 
@@ -355,6 +364,7 @@ class ViewCell(QWidget):
         sl, asp = self._extract_slice()
         self._canvas.set_image(sl, asp, reset_view=False)
         self._canvas.set_label("")
+        self._update_info_overlay()
 
     def _extract_slice(self) -> tuple[np.ndarray, float]:
         sd  = self._sd
@@ -566,6 +576,88 @@ class ViewCell(QWidget):
         )
         self._tc_window.update_data(self._vol, self._sd.series_type, points)
 
+    # ── DICOM info overlay ─────────────────────────────────────────────────
+
+    def _on_info_toggled(self, checked: bool) -> None:
+        if checked:
+            self._update_info_overlay()
+        else:
+            self._canvas.set_overlay(None)
+
+    def _update_info_overlay(self) -> None:
+        if not self._info_btn.isChecked() or self._sd is None:
+            self._canvas.set_overlay(None)
+            return
+        sd = self._sd
+
+        # Bottom-left: geometry from the series header (W/L appended by canvas)
+        dims = f"{sd.cols}×{sd.rows}"
+        if sd.n_slices > 1:
+            dims += f"×{sd.n_slices}"
+        bl_lines = [dims]
+        if sd.n_timepoints > 1:
+            bl_lines.append(f"t {self._cur_t + 1}/{sd.n_timepoints}")
+        if sd.pixel_spacing[0]:
+            bl_lines.append(f"px {sd.pixel_spacing[0]:.3g}/{sd.pixel_spacing[1]:.3g} mm")
+        if sd.slice_spacing:
+            bl_lines.append(f"gap {sd.slice_spacing:.3g} mm")
+        bl = "\n".join(bl_lines)
+
+        if sd.meta.file_format != "dicom":
+            self._canvas.set_overlay((sd.meta.series_name,
+                                      sd.meta.file_format.upper(), bl, ""))
+            return
+
+        fe = self._current_file_entry()
+        if fe is None:
+            self._canvas.set_overlay(("", "", bl, ""))
+            return
+
+        slice_line = ""
+        if sd.series_type in (SeriesType.S3D, SeriesType.S3DT):
+            if self._current_axis() == "z":
+                slice_line = f"z {self._cur_z + 1}/{sd.n_slices}"
+            else:
+                slice_line = f"{self._view_mode} MPR"
+        tl, tr, br = corner_texts(fe.path, slice_line)
+        self._canvas.set_overlay((tl, tr, bl, br), detail_groups(fe.path))
+
+    def _current_axis(self) -> str:
+        acq = self._sd.acq_plane if self._sd and self._sd.acq_plane in _VIEWS else "AXIAL"
+        return _AXIS.get((acq, self._view_mode), "z")
+
+    def _current_file_entry(self):
+        """FileEntry backing the picture on screen (best effort for MPR/4D)."""
+        sd = self._sd
+        entries = sd.file_index
+        if not entries:
+            return None
+        st = sd.series_type
+
+        if st == SeriesType.S2D:
+            return entries[0]
+
+        if st == SeriesType.MULTI:
+            groups = sorted({fe.orient_group for fe in entries})
+            gi = groups[min(self._cur_z, len(groups) - 1)]
+            return next(fe for fe in entries if fe.orient_group == gi)
+
+        if st == SeriesType.S2DT:
+            for fe in entries:
+                if fe.timepoint == self._cur_t:
+                    return fe
+            return entries[0]
+
+        # 3D / 3D-T: entries of the current timepoint, position-sorted like the
+        # volume's z axis. Grouped 4D series only index t=0 — fall back there.
+        t = self._cur_t if st == SeriesType.S3DT else 0
+        cand = [fe for fe in entries if fe.timepoint == t] \
+            or [fe for fe in entries if fe.timepoint == 0] or entries
+        cand = sorted(cand, key=lambda fe: fe.position)
+        if self._current_axis() == "z":
+            return cand[min(self._cur_z, len(cand) - 1)]
+        return cand[len(cand) // 2]   # reformat: representative mid slice
+
     # ── View mode ──────────────────────────────────────────────────────────
 
     def _set_view(self, mode: str) -> None:
@@ -745,6 +837,9 @@ class ViewCell(QWidget):
             elif t == QEvent.KeyPress:
                 if event.key() == Qt.Key_Space and self._bottom_bar.isVisible():
                     self._play_btn.toggle()
+                    return True
+                if event.key() == Qt.Key_I:
+                    self._info_btn.toggle()
                     return True
             elif t == QEvent.MouseButtonDblClick:
                 self.double_clicked.emit()
