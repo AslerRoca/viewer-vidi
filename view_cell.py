@@ -273,6 +273,12 @@ class ViewCell(QWidget):
     def set_colormap(self, name: str) -> None:
         self._canvas.set_colormap(name)
 
+    def set_invert(self, on: bool) -> None:
+        self._canvas.set_invert(on)
+
+    def invert(self) -> bool:
+        return self._canvas.invert()
+
     def current_wl(self) -> tuple[float, float]:
         return self._canvas.wl()
 

@@ -9,7 +9,7 @@ from PyQt5.QtGui import QImage, QPainter, QColor, QFont, QPen
 from PyQt5.QtWidgets import QWidget, QSizePolicy
 
 from .windowing import render_to_rgb, wl_from_percentiles
-from .colormaps import COLORMAPS
+from .colormaps import COLORMAPS, COLORMAPS_INV
 from .gpu import GPU
 
 # Palette for TC point markers (visible on dark background)
@@ -47,6 +47,7 @@ class ImageCanvas(QWidget):
         self._wc: float = 2048.0
         self._ww: float = 4096.0
         self._cmap_name: str = "Gray"
+        self._invert: bool = False
         self._aspect: float = 1.0
 
         self._wl_mode: str = "drag"   # "drag" | "roi" | "roi_tc" | "tc"
@@ -114,6 +115,11 @@ class ImageCanvas(QWidget):
             self._cmap_name = name
             self._rebuild()
 
+    def set_invert(self, on: bool) -> None:
+        if on != self._invert:
+            self._invert = on
+            self._rebuild()
+
     def set_label(self, text: str) -> None:
         self._label = text
         self.update()
@@ -157,6 +163,9 @@ class ImageCanvas(QWidget):
     def wl(self) -> tuple[float, float]:
         return self._wc, self._ww
 
+    def invert(self) -> bool:
+        return self._invert
+
     # ── Rendering ──────────────────────────────────────────────────────────────
 
     def _rebuild(self) -> None:
@@ -164,7 +173,7 @@ class ImageCanvas(QWidget):
             self._qimage = None
             self.update()
             return
-        cmap = COLORMAPS[self._cmap_name]
+        cmap = (COLORMAPS_INV if self._invert else COLORMAPS)[self._cmap_name]
         src  = self._pixels_gpu if self._pixels_gpu is not None else self._pixels
         self._rgb_buf = render_to_rgb(src, self._wc, self._ww, cmap)
         h, w = self._rgb_buf.shape[:2]

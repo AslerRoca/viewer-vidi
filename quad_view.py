@@ -79,6 +79,9 @@ class QuadView(QWidget):
         for c in self._cells:
             c.set_colormap(name)
 
+    def set_invert(self, on: bool) -> None:
+        self._active.set_invert(on)
+
     def reset_wl(self) -> None:
         self._active.reset_wl()
 

@@ -48,3 +48,9 @@ COLORMAPS: dict[str, np.ndarray] = {
 }
 
 COLORMAP_NAMES = list(COLORMAPS.keys())
+
+# Precomputed inverted LUTs. Stable identity matters: GPU.cmap_on_device
+# caches by id(), so reversing on the fly each rebuild would defeat it.
+COLORMAPS_INV: dict[str, np.ndarray] = {
+    name: np.ascontiguousarray(lut[::-1]) for name, lut in COLORMAPS.items()
+}

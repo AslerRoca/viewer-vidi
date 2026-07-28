@@ -51,6 +51,10 @@ class MainWindow(QMainWindow):
         cmap_lbl = QLabel("Colormap")
         cmap_lbl.setStyleSheet("color: #6c7086;")
 
+        self._invert_btn = QPushButton("Invert")
+        self._invert_btn.setCheckable(True)
+        self._invert_btn.setToolTip("Invert the colormap (Ctrl+I)")
+
         self._wc_spin = QDoubleSpinBox()
         self._wc_spin.setRange(-100000, 100000)
         self._wc_spin.setValue(2048)
@@ -80,6 +84,7 @@ class MainWindow(QMainWindow):
         tb_lay.addWidget(self._sidebar_btn)
         tb_lay.addWidget(cmap_lbl)
         tb_lay.addWidget(self._cmap_combo)
+        tb_lay.addWidget(self._invert_btn)
         tb_lay.addWidget(self._wc_spin)
         tb_lay.addWidget(self._ww_spin)
         tb_lay.addWidget(reset_btn)
@@ -137,6 +142,7 @@ class MainWindow(QMainWindow):
 
     def _connect_signals(self) -> None:
         QShortcut(QKeySequence("Ctrl+B"), self).activated.connect(self._toggle_sidebar)
+        QShortcut(QKeySequence("Ctrl+I"), self).activated.connect(self._invert_btn.toggle)
 
         # Tree → active cell load
         self._tree.series_selected.connect(self._on_series_selected)
@@ -148,6 +154,7 @@ class MainWindow(QMainWindow):
 
         # Toolbar → quad
         self._cmap_combo.currentTextChanged.connect(self._quad.set_colormap)
+        self._invert_btn.toggled.connect(self._quad.set_invert)
         self._wc_spin.valueChanged.connect(self._on_toolbar_wl)
         self._ww_spin.valueChanged.connect(self._on_toolbar_wl)
 
@@ -196,6 +203,9 @@ class MainWindow(QMainWindow):
         """Sync toolbar W/L spinboxes to the newly activated cell."""
         wc, ww = cell.current_wl()
         self._sync_wl_spins(wc, ww)
+        self._invert_btn.blockSignals(True)
+        self._invert_btn.setChecked(cell.invert())
+        self._invert_btn.blockSignals(False)
         sd = cell.series_data()
         if sd:
             self._show_type_badge(sd.series_type.value)
