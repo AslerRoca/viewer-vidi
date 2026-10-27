@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (
     QLabel, QPushButton, QComboBox, QDoubleSpinBox, QStatusBar, QShortcut,
 )
 
+from .annotation_dock import AnnotationDock
 from .constants import TREE_WIDTH, STYLE_PATH, BADGE_COLORS
 from .colormaps import COLORMAP_NAMES
 from .data_model import SeriesMeta, GroupedSeriesMeta
@@ -74,6 +75,12 @@ class MainWindow(QMainWindow):
         reset_btn = QPushButton("Reset W/L")
         reset_btn.clicked.connect(self._reset_wl)
 
+        self._ws_btn = QPushButton("Workspace")
+        self._ws_btn.setObjectName("wsBtn")
+        self._ws_btn.setCheckable(True)
+        self._ws_btn.setToolTip("Annotation workspace: segment masks / crop ROIs over a "
+                                "directory or list of images and export them (Ctrl+Shift+W)")
+
         self._type_badge = QLabel("")
         self._type_badge.setObjectName("typeLabel")
         self._type_badge.setMinimumWidth(50)
@@ -88,6 +95,7 @@ class MainWindow(QMainWindow):
         tb_lay.addWidget(self._wc_spin)
         tb_lay.addWidget(self._ww_spin)
         tb_lay.addWidget(reset_btn)
+        tb_lay.addWidget(self._ws_btn)
         tb_lay.addStretch(1)
         tb_lay.addWidget(self._type_badge)
 
@@ -140,9 +148,30 @@ class MainWindow(QMainWindow):
         root_lay.addWidget(self._splitter, 1)
         self.setCentralWidget(central)
 
+        # ── Annotation workspace dock (hidden until requested) ─────────────
+        self._dock = AnnotationDock(self._quad, self)
+        self.addDockWidget(Qt.RightDockWidgetArea, self._dock)
+        self._dock.hide()
+
     def _connect_signals(self) -> None:
         QShortcut(QKeySequence("Ctrl+B"), self).activated.connect(self._toggle_sidebar)
         QShortcut(QKeySequence("Ctrl+I"), self).activated.connect(self._invert_btn.toggle)
+        # Dock shortcuts are application-wide so they keep working when the
+        # dock floats; each handler no-ops while the dock is hidden.
+        for keys, slot in (("Ctrl+Shift+W", self._ws_btn.toggle),
+                           ("Ctrl+S", self._dock.save_and_next),
+                           ("Ctrl+Z", self._dock.undo),
+                           (Qt.Key_Delete, self._dock.toggle_delete),
+                           (Qt.Key_Backspace, self._dock.toggle_delete)):   # Mac "delete"
+            sc = QShortcut(QKeySequence(keys), self)
+            sc.setContext(Qt.ApplicationShortcut)
+            sc.activated.connect(slot)
+
+        # Workspace dock ↔ toolbar button, tools follow the active panel
+        self._ws_btn.toggled.connect(self._dock.setVisible)
+        self._dock.visibilityChanged.connect(self._on_dock_visibility)
+        self._tree.root_changed.connect(self._dock.set_start_dir)
+        self._quad.active_cell_changed.connect(self._dock.on_active_cell_changed)
 
         # Tree → active cell load
         self._tree.series_selected.connect(self._on_series_selected)
@@ -188,6 +217,7 @@ class MainWindow(QMainWindow):
         """Load into the currently active cell."""
         cell = self._quad.active_cell()
         cell.load_meta(meta)
+        self._dock.on_active_cell_changed(cell)   # keep the dock's tool on the panel
 
         if isinstance(meta, GroupedSeriesMeta):
             self._status_series.setText(
@@ -263,6 +293,11 @@ class MainWindow(QMainWindow):
     def _on_sidebar_btn(self, checked: bool) -> None:
         if checked != self._tree.isVisible():
             self._toggle_sidebar()
+
+    def _on_dock_visibility(self, visible: bool) -> None:
+        self._ws_btn.blockSignals(True)
+        self._ws_btn.setChecked(visible)
+        self._ws_btn.blockSignals(False)
 
     def closeEvent(self, event) -> None:
         self._quad.cancel_all()

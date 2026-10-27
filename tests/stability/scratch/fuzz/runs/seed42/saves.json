@@ -1,0 +1,687 @@
+[
+ {
+  "idx": 11,
+  "advance": true,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 0,
+   "shape": null,
+   "shown": null,
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/C.nii",
+   "dock_visible": true,
+   "invert": false,
+   "wl": [
+    -471.1477657600001,
+    8426.015539200002
+   ]
+  },
+  "dialogs": [],
+  "status": "Image still loading \u2014 try again in a moment."
+ },
+ {
+  "idx": 34,
+  "advance": true,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 0,
+   "shape": null,
+   "shown": null,
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/C.nii",
+   "dock_visible": true,
+   "invert": false,
+   "wl": [
+    11266.999665650896,
+    9207.34310811894
+   ]
+  },
+  "dialogs": [],
+  "status": "Image still loading \u2014 try again in a moment."
+ },
+ {
+  "idx": 59,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 4,
+   "shape": [
+    2570,
+    2040
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100502_2.dcm",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100502_2.dcm",
+   "dock_visible": true,
+   "invert": false,
+   "wl": [
+    3122.0,
+    704.0
+   ]
+  },
+  "dialogs": [],
+  "status": "Saved 3 file(s) \u2192 vidi_output/ (png, jpeg, nifti)"
+ },
+ {
+  "idx": 60,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 4,
+   "shape": [
+    2570,
+    2040
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100502_2.dcm",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100502_2.dcm",
+   "dock_visible": true,
+   "invert": false,
+   "wl": [
+    3122.0,
+    704.0
+   ]
+  },
+  "dialogs": [],
+  "status": "Saved 3 file(s) \u2192 vidi_output/ (png, jpeg, nifti)"
+ },
+ {
+  "idx": 76,
+  "advance": true,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 4,
+   "shape": [
+    2570,
+    2040
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100502_2.dcm",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100502_2.dcm",
+   "dock_visible": true,
+   "invert": false,
+   "wl": [
+    2761.846625766871,
+    827.0
+   ]
+  },
+  "dialogs": [],
+  "status": "Nothing to save: draw a mask or a rectangle, or tick Original."
+ },
+ {
+  "idx": 95,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 5,
+   "shape": [
+    160,
+    120
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth2d_160x120.nii.gz",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth2d_160x120.nii.gz",
+   "dock_visible": true,
+   "invert": false,
+   "wl": [
+    498.3213195800781,
+    964.5203399658203
+   ]
+  },
+  "dialogs": [],
+  "status": "Saved 3 file(s) \u2192 vidi_output/ (png, jpeg, nifti)"
+ },
+ {
+  "idx": 102,
+  "advance": true,
+  "pre": {
+   "mask_px": 0,
+   "rect": [
+    8,
+    64,
+    120,
+    133
+   ],
+   "index": 5,
+   "shape": [
+    160,
+    120
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth2d_160x120.nii.gz",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth2d_160x120.nii.gz",
+   "dock_visible": true,
+   "invert": true,
+   "wl": [
+    498.3213195800781,
+    964.5203399658203
+   ]
+  },
+  "dialogs": [],
+  "status": "Saved 3 file(s) \u2192 vidi_output/ (png, jpeg, nifti)"
+ },
+ {
+  "idx": 118,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 3,
+   "shape": [
+    2570,
+    2040
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100419_1.dcm",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100419_1.dcm",
+   "dock_visible": true,
+   "invert": true,
+   "wl": [
+    997.0,
+    1830.0
+   ]
+  },
+  "dialogs": [],
+  "status": "Saved 3 file(s) \u2192 vidi_output/ (png, jpeg, nifti)"
+ },
+ {
+  "idx": 119,
+  "advance": true,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 3,
+   "shape": [
+    2570,
+    2040
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100419_1.dcm",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100419_1.dcm",
+   "dock_visible": true,
+   "invert": true,
+   "wl": [
+    997.0,
+    1830.0
+   ]
+  },
+  "dialogs": [],
+  "status": "Saved 3 file(s) \u2192 vidi_output/ (png, jpeg, nifti)"
+ },
+ {
+  "idx": 130,
+  "advance": true,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 4,
+   "shape": [
+    2570,
+    2040
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100502_2.dcm",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100502_2.dcm",
+   "dock_visible": true,
+   "invert": true,
+   "wl": [
+    3122.0,
+    704.0
+   ]
+  },
+  "dialogs": [],
+  "status": "Nothing to save: draw a mask or a rectangle, or tick Original."
+ },
+ {
+  "idx": 131,
+  "advance": true,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 4,
+   "shape": [
+    2570,
+    2040
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100502_2.dcm",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100502_2.dcm",
+   "dock_visible": true,
+   "invert": true,
+   "wl": [
+    3122.0,
+    704.0
+   ]
+  },
+  "dialogs": [],
+  "status": "Nothing to save: draw a mask or a rectangle, or tick Original."
+ },
+ {
+  "idx": 143,
+  "advance": true,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 4,
+   "shape": [
+    288,
+    384
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/C.nii",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100502_2.dcm",
+   "dock_visible": false,
+   "invert": false,
+   "wl": [
+    0.0,
+    1.0
+   ]
+  },
+  "dialogs": [
+   [
+    "QMessageBox",
+    "Panel mismatch",
+    "The active panel shows\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/C.nii\n\nbut the current item is\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100502_2.dcm\n\nDouble-click the item in the list to load it, then save."
+   ]
+  ],
+  "status": ""
+ },
+ {
+  "idx": 145,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 4,
+   "shape": [
+    288,
+    384
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/C.nii",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100502_2.dcm",
+   "dock_visible": false,
+   "invert": false,
+   "wl": [
+    0.0,
+    1.0
+   ]
+  },
+  "dialogs": [
+   [
+    "QMessageBox",
+    "Panel mismatch",
+    "The active panel shows\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/C.nii\n\nbut the current item is\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100502_2.dcm\n\nDouble-click the item in the list to load it, then save."
+   ]
+  ],
+  "status": ""
+ },
+ {
+  "idx": 151,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 6,
+   "shape": [
+    200,
+    300
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth_300x200.png",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth_300x200.png",
+   "dock_visible": false,
+   "invert": false,
+   "wl": [
+    116.0,
+    199.0
+   ]
+  },
+  "dialogs": [],
+  "status": "Nothing to save: draw a mask or a rectangle, or tick Original."
+ },
+ {
+  "idx": 198,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 3,
+   "shape": [
+    2570,
+    2040
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100419_1.dcm",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100419_1.dcm",
+   "dock_visible": true,
+   "invert": true,
+   "wl": [
+    997.0,
+    1830.0
+   ]
+  },
+  "dialogs": [],
+  "status": "Nothing to save: draw a mask or a rectangle, or tick Original."
+ },
+ {
+  "idx": 202,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 3,
+   "shape": [
+    2570,
+    2040
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100419_1.dcm",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100419_1.dcm",
+   "dock_visible": true,
+   "invert": true,
+   "wl": [
+    997.0,
+    1830.0
+   ]
+  },
+  "dialogs": [],
+  "status": "Saved 3 file(s) \u2192 vidi_output/ (png, jpeg, nifti)"
+ },
+ {
+  "idx": 211,
+  "advance": true,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 3,
+   "shape": [
+    2570,
+    2040
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100419_1.dcm",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100419_1.dcm",
+   "dock_visible": true,
+   "invert": true,
+   "wl": [
+    997.0,
+    1830.0
+   ]
+  },
+  "dialogs": [],
+  "status": "Saved 3 file(s) \u2192 vidi_output/ (png, jpeg, nifti)"
+ },
+ {
+  "idx": 228,
+  "advance": true,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 3,
+   "shape": [
+    2570,
+    2040
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100419_1.dcm",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100419_1.dcm",
+   "dock_visible": true,
+   "invert": false,
+   "wl": [
+    997.0,
+    1830.0
+   ]
+  },
+  "dialogs": [],
+  "status": "Saved 3 file(s) \u2192 vidi_output/ (png, jpeg, nifti)"
+ },
+ {
+  "idx": 238,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 6,
+   "shape": [
+    200,
+    300
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth_300x200.png",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth_300x200.png",
+   "dock_visible": true,
+   "invert": false,
+   "wl": [
+    116.0,
+    199.0
+   ]
+  },
+  "dialogs": [],
+  "status": "Saved 3 file(s) \u2192 vidi_output/ (png, jpeg, nifti)"
+ },
+ {
+  "idx": 256,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 6,
+   "shape": [
+    2570,
+    2040
+   ],
+   "shown": "/media/zsk/ressd/research/alldata_backup/dicom/original/bpd3_20100419_1.dcm",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth_300x200.png",
+   "dock_visible": true,
+   "invert": true,
+   "wl": [
+    707.2907353216037,
+    1166.5114822888854
+   ]
+  },
+  "dialogs": [
+   [
+    "QMessageBox",
+    "Panel mismatch",
+    "The active panel shows\n/media/zsk/ressd/research/alldata_backup/dicom/original/bpd3_20100419_1.dcm\n\nbut the current item is\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth_300x200.png\n\nDouble-click the item in the list to load it, then save."
+   ]
+  ],
+  "status": ""
+ },
+ {
+  "idx": 274,
+  "advance": true,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 5,
+   "shape": [
+    2570,
+    2040
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100419_1.dcm",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth2d_160x120.nii.gz",
+   "dock_visible": false,
+   "invert": false,
+   "wl": [
+    997.0,
+    1830.0
+   ]
+  },
+  "dialogs": [
+   [
+    "QMessageBox",
+    "Panel mismatch",
+    "The active panel shows\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/bpd3_20100419_1.dcm\n\nbut the current item is\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth2d_160x120.nii.gz\n\nDouble-click the item in the list to load it, then save."
+   ]
+  ],
+  "status": ""
+ },
+ {
+  "idx": 293,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 5,
+   "shape": [
+    160,
+    120
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth2d_160x120.nii.gz",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth2d_160x120.nii.gz",
+   "dock_visible": false,
+   "invert": false,
+   "wl": [
+    498.3213195800781,
+    964.5203399658203
+   ]
+  },
+  "dialogs": [],
+  "status": "Nothing to save: draw a mask or a rectangle, or tick Original."
+ },
+ {
+  "idx": 313,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 6,
+   "shape": [
+    288,
+    384
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/C.nii",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth_300x200.png",
+   "dock_visible": true,
+   "invert": true,
+   "wl": [
+    0.0,
+    1.0
+   ]
+  },
+  "dialogs": [
+   [
+    "QMessageBox",
+    "Panel mismatch",
+    "The active panel shows\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/C.nii\n\nbut the current item is\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth_300x200.png\n\nDouble-click the item in the list to load it, then save."
+   ]
+  ],
+  "status": ""
+ },
+ {
+  "idx": 348,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 6,
+   "shape": [
+    288,
+    384
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/C.nii",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth_300x200.png",
+   "dock_visible": false,
+   "invert": false,
+   "wl": [
+    0.0,
+    1.0
+   ]
+  },
+  "dialogs": [
+   [
+    "QMessageBox",
+    "Panel mismatch",
+    "The active panel shows\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/C.nii\n\nbut the current item is\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth_300x200.png\n\nDouble-click the item in the list to load it, then save."
+   ]
+  ],
+  "status": ""
+ },
+ {
+  "idx": 350,
+  "advance": false,
+  "pre": {
+   "mask_px": 1441,
+   "rect": null,
+   "index": 6,
+   "shape": [
+    288,
+    384
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/C.nii",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth_300x200.png",
+   "dock_visible": false,
+   "invert": false,
+   "wl": [
+    0.0,
+    1.0
+   ]
+  },
+  "dialogs": [
+   [
+    "QMessageBox",
+    "Panel mismatch",
+    "The active panel shows\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/C.nii\n\nbut the current item is\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth_300x200.png\n\nDouble-click the item in the list to load it, then save."
+   ]
+  ],
+  "status": ""
+ },
+ {
+  "idx": 358,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 5,
+   "shape": [
+    160,
+    120
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth2d_160x120.nii.gz",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth2d_160x120.nii.gz",
+   "dock_visible": false,
+   "invert": false,
+   "wl": [
+    498.3213195800781,
+    964.5203399658203
+   ]
+  },
+  "dialogs": [],
+  "status": "Saved 3 file(s) \u2192 vidi_output/ (png, jpeg, nifti)"
+ },
+ {
+  "idx": 360,
+  "advance": true,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 5,
+   "shape": [
+    160,
+    120
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth2d_160x120.nii.gz",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth2d_160x120.nii.gz",
+   "dock_visible": false,
+   "invert": true,
+   "wl": [
+    498.3213195800781,
+    964.5203399658203
+   ]
+  },
+  "dialogs": [],
+  "status": "Nothing to save: draw a mask or a rectangle, or tick Original."
+ },
+ {
+  "idx": 386,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 6,
+   "shape": [
+    200,
+    300
+   ],
+   "shown": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth_300x200.png",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed42/ws/synth_300x200.png",
+   "dock_visible": true,
+   "invert": false,
+   "wl": [
+    116.0,
+    199.0
+   ]
+  },
+  "dialogs": [],
+  "status": "Nothing to save: draw a mask or a rectangle, or tick Original."
+ }
+]

@@ -1,0 +1,46 @@
+{
+ "seed": 32,
+ "actions": 400,
+ "elapsed": 14.2,
+ "violations": 2,
+ "manifest_rows": 4,
+ "saves": 25,
+ "shapes": {
+  "C": [
+   56,
+   384
+  ],
+  "bpd1_20100101_1": [
+   2044,
+   1514
+  ],
+  "bpd1_20100101_2": [
+   2044,
+   1514
+  ],
+  "bpd3_20100419_1": [
+   2570,
+   2040
+  ],
+  "bpd3_20100502_2": [
+   2570,
+   2040
+  ],
+  "synth2d_160x120": [
+   160,
+   120
+  ],
+  "synth_300x200": [
+   200,
+   300
+  ]
+ },
+ "stale": [
+  "stale C_mask.png on disk not listed in manifest row",
+  "stale bpd1_20100101_1_image.png on disk not listed in manifest row"
+ ],
+ "kinds": [
+  "audit_mask_shape",
+  "audit_nifti_mask_shape"
+ ]
+}

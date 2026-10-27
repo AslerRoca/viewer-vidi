@@ -1,0 +1,22 @@
+[
+ {
+  "kind": "tool_sync",
+  "idx": 1,
+  "msg": "after roi_btn: dock visible, tool paint but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 1,
+   "roi_checked": true
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 86,
+  "msg": "after roi_btn: dock visible, tool drag but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 86,
+   "roi_checked": true
+  }
+ }
+]

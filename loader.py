@@ -172,14 +172,20 @@ class LoaderWorker(QThread):
 
         return results
 
-    def _read_slice_from_ds(self, ds, rows: int, cols: int) -> np.ndarray:
+    def _read_slice_from_ds(self, ds, rows: int, cols: int,
+                            strict: bool = False) -> np.ndarray:
         """Extract pixel array from an already-parsed (possibly deferred) ds.
 
         When ds was read with defer_size, accessing pixel_array triggers a
         targeted disk seek to the PixelData offset — no header re-parsing.
+        Volumes tolerate a bad slice (zeros); *strict* (single-image items)
+        raises so the failure is reported instead of shown as a flat image.
         """
         try:
             raw = ds.pixel_array
+            if raw.ndim == 3:
+                raise ValueError(f"multi-frame DICOM ({raw.shape[0]} frames) "
+                                 "is not supported as a single image")
             arr = apply_rescale(raw, ds)
             if arr.shape != (rows, cols):
                 out = np.zeros((rows, cols), dtype=np.float32)
@@ -188,7 +194,9 @@ class LoaderWorker(QThread):
                 out[:h, :w] = arr[:h, :w]
                 return out
             return arr
-        except Exception:
+        except Exception as exc:
+            if strict:
+                raise RuntimeError(f"Cannot read pixel data: {exc}") from exc
             return np.zeros((rows, cols), dtype=np.float32)
 
     def _run_dicom_load(self, meta: SeriesMeta) -> None:
@@ -249,15 +257,15 @@ class LoaderWorker(QThread):
         for t in by_t:
             by_t[t].sort(key=lambda e: e.position)
 
-        def read_sl(path: str) -> np.ndarray:
+        def read_sl(path: str, strict: bool = False) -> np.ndarray:
             if ds_cache and path in ds_cache:
                 # Reuse cached ds: pixel data loaded via a targeted seek, no
                 # header re-parsing (defer_size kept the ds alive in memory).
-                return self._read_slice_from_ds(ds_cache[path], rows, cols)
-            return self._read_slice(path, rows, cols)
+                return self._read_slice_from_ds(ds_cache[path], rows, cols, strict)
+            return self._read_slice(path, rows, cols, strict)
 
         if stype == SeriesType.S2D:
-            arr = read_sl(by_t[0][0].path)
+            arr = read_sl(by_t[0][0].path, strict=True)   # raises → load_error
             if not sd.wl_from_header:
                 sd.window_center, sd.window_width = wl_from_percentiles(arr)
             self.pixels_ready.emit(0, arr)
@@ -316,10 +324,14 @@ class LoaderWorker(QThread):
         if not self._cancel.is_set():
             self.load_complete.emit()
 
-    def _read_slice(self, path: str, rows: int, cols: int) -> np.ndarray:
+    def _read_slice(self, path: str, rows: int, cols: int,
+                    strict: bool = False) -> np.ndarray:
         try:
             ds = pydicom.dcmread(path)
             raw = ds.pixel_array
+            if raw.ndim == 3:
+                raise ValueError(f"multi-frame DICOM ({raw.shape[0]} frames) "
+                                 "is not supported as a single image")
             arr = apply_rescale(raw, ds)
             if arr.shape != (rows, cols):
                 out = np.zeros((rows, cols), dtype=np.float32)
@@ -328,7 +340,9 @@ class LoaderWorker(QThread):
                 out[:h, :w] = arr[:h, :w]
                 return out
             return arr
-        except Exception:
+        except Exception as exc:
+            if strict:
+                raise RuntimeError(f"Cannot read pixel data: {exc}") from exc
             return np.zeros((rows, cols), dtype=np.float32)
 
     # ── NIfTI single-file ─────────────────────────────────────────────────────
@@ -351,7 +365,7 @@ class LoaderWorker(QThread):
 
         if ndim == 2:
             stype = SeriesType.S2D
-            arr   = data                                   # (H, W)
+            arr   = np.ascontiguousarray(data.T)           # (Y, X) = (H, W), like 3-D
             H, W  = arr.shape
             n_z, n_t = 1, 1
         elif ndim == 3:
@@ -367,11 +381,11 @@ class LoaderWorker(QThread):
             self.load_error.emit(f"Unsupported NIfTI shape: {data.shape}")
             return
 
-        # Spacing from header
+        # Spacing from header: zooms are (x, y, z); displayed rows are Y, cols X
         try:
             zooms = img.header.get_zooms()
-            px_row = float(zooms[0]) if len(zooms) > 0 else 1.0
-            px_col = float(zooms[1]) if len(zooms) > 1 else 1.0
+            px_col = float(zooms[0]) if len(zooms) > 0 else 1.0
+            px_row = float(zooms[1]) if len(zooms) > 1 else 1.0
             sl_sp  = float(zooms[2]) if len(zooms) > 2 else 1.0
         except Exception:
             px_row = px_col = sl_sp = 1.0
@@ -718,7 +732,7 @@ class LoaderWorker(QThread):
                 img  = nib.load(path)
                 data = np.asarray(img.dataobj, dtype=np.float32)
                 if data.ndim == 2:
-                    return data
+                    return np.ascontiguousarray(data.T)         # (Y, X)
                 if data.ndim == 3:
                     return np.transpose(data, (2, 1, 0))    # (Z, Y, X)
                 if data.ndim >= 4:

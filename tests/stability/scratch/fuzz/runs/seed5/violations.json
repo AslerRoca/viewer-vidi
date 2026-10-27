@@ -1,0 +1,92 @@
+[
+ {
+  "kind": "tool_sync",
+  "idx": 3,
+  "msg": "after roi_btn: dock visible, tool rect but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 3,
+   "roi_checked": true
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 42,
+  "msg": "after roi_btn: dock visible, tool paint but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 42,
+   "roi_checked": true
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 44,
+  "msg": "after roi_btn: dock visible, tool paint but active canvas mode drag",
+  "action": {
+   "name": "roi_btn",
+   "idx": 44,
+   "roi_checked": false
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 54,
+  "msg": "after load_file: dock visible, tool rect but active canvas mode drag",
+  "action": {
+   "name": "load_file",
+   "path": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed5/ws/bpd1_20100101_2.dcm",
+   "idx": 54
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 375,
+  "msg": "after roi_btn: dock visible, tool paint but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 375,
+   "roi_checked": true
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 394,
+  "msg": "after roi_btn: dock visible, tool poly but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 394,
+   "roi_checked": true
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 558,
+  "msg": "after load_file: dock visible, tool paint but active canvas mode drag",
+  "action": {
+   "name": "load_file",
+   "path": "/media/zsk/ressd/research/alldata_backup/dicom/original/bpd3_20100419_2.dcm",
+   "idx": 558
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 573,
+  "msg": "after roi_btn: dock visible, tool rect but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 573,
+   "roi_checked": true
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 581,
+  "msg": "after roi_btn: dock visible, tool drag but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 581,
+   "roi_checked": true
+  }
+ }
+]

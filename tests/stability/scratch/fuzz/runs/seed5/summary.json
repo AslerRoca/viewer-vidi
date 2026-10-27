@@ -1,0 +1,44 @@
+{
+ "seed": 5,
+ "actions": 600,
+ "elapsed": 34.3,
+ "violations": 9,
+ "manifest_rows": 5,
+ "saves": 39,
+ "shapes": {
+  "bpd1_20100101_1": [
+   2044,
+   1514
+  ],
+  "bpd1_20100101_2": [
+   2044,
+   1514
+  ],
+  "synth_300x200": [
+   200,
+   300
+  ],
+  "bpd3_20100419_1": [
+   2570,
+   2040
+  ],
+  "bpd3_20100502_2": [
+   2570,
+   2040
+  ],
+  "synth2d_160x120": [
+   160,
+   120
+  ]
+ },
+ "stale": [
+  "stale bpd1_20100101_1_roi.png on disk not listed in manifest row",
+  "stale bpd3_20100419_1_roi.png on disk not listed in manifest row",
+  "stale bpd3_20100502_2_roi.png on disk not listed in manifest row",
+  "stale synth2d_160x120_mask.png on disk not listed in manifest row",
+  "stale synth2d_160x120_image.png on disk not listed in manifest row"
+ ],
+ "kinds": [
+  "tool_sync"
+ ]
+}

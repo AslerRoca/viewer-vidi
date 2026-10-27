@@ -1,0 +1,42 @@
+[
+ {
+  "kind": "tool_sync",
+  "idx": 133,
+  "msg": "after load_file: dock visible, tool paint but active canvas mode drag",
+  "action": {
+   "name": "load_file",
+   "path": "/media/zsk/ressd/research/alldata_backup/dicom/original/bpd3_20100419_1.dcm",
+   "idx": 133
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 213,
+  "msg": "after load_file: dock visible, tool paint but active canvas mode drag",
+  "action": {
+   "name": "load_file",
+   "path": "/media/zsk/ressd/research/alldata_backup/dicom/original/bpd3_20100420_2.dcm",
+   "idx": 213
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 249,
+  "msg": "after roi_btn: dock visible, tool rect but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 249,
+   "roi_checked": true
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 381,
+  "msg": "after roi_btn: dock visible, tool rect but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 381,
+   "roi_checked": true
+  }
+ }
+]

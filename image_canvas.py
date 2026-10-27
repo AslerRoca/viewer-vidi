@@ -4,8 +4,8 @@ from __future__ import annotations
 from typing import Optional
 
 import numpy as np
-from PyQt5.QtCore import Qt, QPoint, QRect, pyqtSignal
-from PyQt5.QtGui import QImage, QPainter, QColor, QFont, QPen
+from PyQt5.QtCore import Qt, QPoint, QPointF, QRect, pyqtSignal
+from PyQt5.QtGui import QImage, QPainter, QColor, QFont, QPen, QPolygon
 from PyQt5.QtWidgets import QWidget, QSizePolicy
 
 from .windowing import render_to_rgb, wl_from_percentiles
@@ -19,19 +19,41 @@ TC_COLORS = [
 ]
 _MARKER_R = 6   # marker radius in screen pixels
 
+# Annotation overlay: segmentation mask + crop rectangle (image coordinates)
+_MASK_RGB   = (239, 83, 80)     # red reads well over greyscale anatomy
+_MASK_ALPHA = 110
+_CROP_RGB   = (245, 200, 66)    # yellow, same family as the ROI W/L band
+_UNDO_DEPTH = 10                # mask snapshots kept for undo
+_CROSS_MODES = ("roi", "roi_tc", "tc", "paint", "poly", "rect")
+
+_DISKS: dict[int, np.ndarray] = {}
+
+
+def _disk(r: int) -> np.ndarray:
+    """Boolean (2r+1)² brush footprint, cached per radius."""
+    d = _DISKS.get(r)
+    if d is None:
+        yy, xx = np.ogrid[-r:r + 1, -r:r + 1]
+        d = _DISKS[r] = (xx * xx + yy * yy) <= r * r
+    return d
+
 
 class ImageCanvas(QWidget):
     """Displays a single 2-D float32 image slice via QPainter.
 
-    Two interaction modes (set via set_wl_mode):
-      "drag" — left-drag adjusts window/level (default)
-      "roi"  — drag a rectangle; release sets W/L from region stats
+    Interaction modes (set via set_wl_mode):
+      "drag"  — left-drag adjusts window/level (default)
+      "roi"   — drag a rectangle; release sets W/L from region stats
+      "paint" — brush paints (or erases) the segmentation mask
+      "poly"  — click vertices, double-click/Enter fills the polygon into the mask
+      "rect"  — drag the crop rectangle (ROI export)
     """
 
     wl_changed          = pyqtSignal(float, float)
     pixel_hovered       = pyqtSignal(int, int, float)
     tc_points_changed   = pyqtSignal(list)    # list of (ix, iy) image coords
     roi_tc_polys_changed = pyqtSignal(object) # list of np.ndarray each (N,2) image (x,y)
+    annotation_changed  = pyqtSignal()        # mask stroke / polygon / crop rect edited
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -90,12 +112,39 @@ class ImageCanvas(QWidget):
         self._ov_expanded:     set[str] = set()
         self._ov_header_rects: list[tuple[QRect, str]] = []   # hit areas
 
+        # Annotation state, all in image coordinates. The mask is uint8 0/1
+        # with the same shape as the displayed slice; _mask_rgba is the BGRA
+        # overlay buffer behind _mask_qimage (alpha follows the mask).
+        self._mask:          Optional[np.ndarray] = None
+        self._mask_rgba:     Optional[np.ndarray] = None
+        self._mask_qimage:   Optional[QImage]     = None
+        self._mask_nonempty: bool = False
+        self._brush_r:       int  = 20
+        self._erase:         bool = False
+        self._stroke_last:   Optional[tuple[int, int]] = None
+        self._undo:          list[tuple[np.ndarray, Optional[tuple]]] = []  # (mask, rect)
+        self._poly_pts:      list[tuple[int, int]] = []
+        self._crop_rect:     Optional[tuple[int, int, int, int]] = None  # x0,y0,x1,y1 excl.
+        self._rect_start:    Optional[QPoint] = None
+        self._rect_end:      Optional[QPoint] = None
+        self._cursor_pos:    Optional[QPoint] = None   # brush/polygon cursor feedback
+        self._image_key = None                          # slice/time/view the mask belongs to
+
     # ── Public API ─────────────────────────────────────────────────────────────
 
     def set_image(self, pixels: Optional[np.ndarray], aspect: float = 1.0,
-                  reset_view: bool = True) -> None:
+                  reset_view: bool = True, key=None) -> None:
+        """Show a slice. *key* identifies which slice/time/view it is: the
+        annotations belong to that key and are reset when it changes, so a
+        mask drawn on one slice never silently rides along to another."""
         self._pixels = pixels
         self._aspect = aspect
+        if pixels is None:
+            self._reset_annotations(None)
+        elif (self._mask is None or self._mask.shape != pixels.shape
+              or key != self._image_key):
+            self._reset_annotations(pixels.shape)
+        self._image_key = key
         if reset_view:
             self._pan_x = 0
             self._pan_y = 0
@@ -138,13 +187,21 @@ class ImageCanvas(QWidget):
         self.update()
 
     def set_wl_mode(self, mode: str) -> None:
-        """Switch between "drag", "roi", "roi_tc", and "tc" interaction modes."""
+        """Switch between "drag", "roi", "roi_tc", "tc" and the annotation
+        tools "paint", "poly", "rect" (see class docstring)."""
         self._wl_mode      = mode
         self._roi_start    = None
         self._roi_end      = None
         self._lasso_screen = []
-        self.setCursor(Qt.CrossCursor if mode in ("roi", "roi_tc", "tc") else Qt.ArrowCursor)
+        self._poly_pts     = []
+        self._rect_start   = None
+        self._rect_end     = None
+        self._stroke_last  = None
+        self.setCursor(Qt.CrossCursor if mode in _CROSS_MODES else Qt.ArrowCursor)
         self.update()
+
+    def wl_mode(self) -> str:
+        return self._wl_mode
 
     def clear_roi_tc_polys(self) -> None:
         self._roi_tc_polys = []
@@ -165,6 +222,217 @@ class ImageCanvas(QWidget):
 
     def invert(self) -> bool:
         return self._invert
+
+    # ── Annotation API (segmentation mask + crop rectangle) ────────────────────
+
+    def set_brush(self, radius: int, erase: bool) -> None:
+        self._brush_r = max(1, int(radius))
+        self._erase   = bool(erase)
+        self.update()
+
+    def displayed_pixels(self) -> Optional[np.ndarray]:
+        """The float32 (H, W) slice on screen (orientation flips applied)."""
+        return self._pixels
+
+    def mask(self) -> Optional[np.ndarray]:
+        """Live uint8 (H, W) 0/1 mask in displayed-slice coordinates."""
+        return self._mask
+
+    def mask_pixels(self) -> int:
+        return int(np.count_nonzero(self._mask)) if self._mask is not None else 0
+
+    def crop_rect(self) -> Optional[tuple[int, int, int, int]]:
+        """Crop rectangle (x0, y0, x1, y1) in image coords, x1/y1 exclusive."""
+        return self._crop_rect
+
+    def clear_annotations(self) -> None:
+        """Wipe the mask and drop the crop rectangle (one undo step)."""
+        if self._mask is not None:
+            self._push_undo()
+            self._mask[:] = 0
+            self._mask_refresh()
+            self._mask_nonempty = False
+        self._crop_rect = None
+        self._poly_pts  = []
+        self.annotation_changed.emit()
+        self.update()
+
+    def undo_annotation(self) -> bool:
+        """Restore mask and rectangle from before the last stroke / polygon /
+        rectangle / clear."""
+        if not self._undo:
+            return False
+        self._mask, self._crop_rect = self._undo.pop()
+        self._mask_refresh()
+        self._mask_nonempty = bool(self._mask.any())
+        self.annotation_changed.emit()
+        self.update()
+        return True
+
+    def _reset_annotations(self, shape) -> None:
+        self._undo        = []
+        self._poly_pts    = []
+        self._crop_rect   = None
+        self._stroke_last = None
+        self._mask_nonempty = False
+        if shape is None:
+            self._mask = self._mask_rgba = self._mask_qimage = None
+            return
+        h, w = shape
+        self._mask = np.zeros((h, w), dtype=np.uint8)
+        rgba = np.zeros((h, w, 4), dtype=np.uint8)   # ARGB32 is B,G,R,A in memory
+        rgba[..., 0] = _MASK_RGB[2]
+        rgba[..., 1] = _MASK_RGB[1]
+        rgba[..., 2] = _MASK_RGB[0]
+        self._mask_rgba   = rgba
+        self._mask_qimage = QImage(rgba.data, w, h, w * 4, QImage.Format_ARGB32)
+
+    def _mask_refresh(self, bbox: Optional[tuple[int, int, int, int]] = None) -> None:
+        """Sync overlay alpha with the mask — whole array or a (y0, y1, x0, x1) box."""
+        if self._mask is None or self._mask_rgba is None:
+            return
+        if bbox is None:
+            self._mask_rgba[..., 3] = self._mask * _MASK_ALPHA
+        else:
+            y0, y1, x0, x1 = bbox
+            self._mask_rgba[y0:y1, x0:x1, 3] = self._mask[y0:y1, x0:x1] * _MASK_ALPHA
+
+    def _push_undo(self) -> None:
+        if self._mask is None:
+            return
+        self._undo.append((self._mask.copy(), self._crop_rect))
+        if len(self._undo) > _UNDO_DEPTH:
+            self._undo.pop(0)
+
+    def _paint_at(self, ix: int, iy: int) -> None:
+        """Stamp one brush disk (paint or erase) centred on image pixel (ix, iy)."""
+        r = self._brush_r
+        h, w = self._mask.shape
+        y0, y1 = max(0, iy - r), min(h, iy + r + 1)
+        x0, x1 = max(0, ix - r), min(w, ix + r + 1)
+        if y0 >= y1 or x0 >= x1:
+            return
+        sub = _disk(r)[y0 - (iy - r):y1 - (iy - r), x0 - (ix - r):x1 - (ix - r)]
+        self._mask[y0:y1, x0:x1][sub] = 0 if self._erase else 1
+        self._mask_refresh((y0, y1, x0, x1))
+
+    def _paint_segment(self, p0: tuple[int, int], p1: tuple[int, int]) -> None:
+        """Stamp disks along p0→p1 densely enough to leave no gaps."""
+        (x0, y0), (x1, y1) = p0, p1
+        n = int(max(abs(x1 - x0), abs(y1 - y0)) / max(1.0, self._brush_r * 0.5)) + 1
+        for i in range(1, n + 1):
+            t = i / n
+            self._paint_at(int(round(x0 + (x1 - x0) * t)), int(round(y0 + (y1 - y0) * t)))
+
+    def _finish_polygon(self) -> None:
+        pts = self._poly_pts
+        self._poly_pts = []
+        if self._mask is not None and len(pts) >= 3:
+            self._push_undo()
+            self._fill_polygon(pts)
+            if not self._erase:
+                self._mask_nonempty = True
+            self.annotation_changed.emit()
+        self.update()
+
+    def _fill_polygon(self, pts: list[tuple[int, int]]) -> None:
+        """Rasterise the polygon with QPainter into the mask's bounding box."""
+        h, w = self._mask.shape
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        x0, x1 = max(0, min(xs)), min(w, max(xs) + 1)
+        y0, y1 = max(0, min(ys)), min(h, max(ys) + 1)
+        bw, bh = x1 - x0, y1 - y0
+        if bw <= 0 or bh <= 0:
+            return
+        img = QImage(bw, bh, QImage.Format_Grayscale8)
+        img.fill(0)
+        p = QPainter(img)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(255, 255, 255))
+        p.drawPolygon(QPolygon([QPoint(x - x0, y - y0) for x, y in pts]), Qt.WindingFill)
+        p.end()
+        ptr = img.constBits()
+        ptr.setsize(img.sizeInBytes())
+        buf = np.frombuffer(ptr, dtype=np.uint8).reshape(bh, img.bytesPerLine())[:, :bw]
+        self._mask[y0:y1, x0:x1][buf > 127] = 0 if self._erase else 1
+        self._mask_refresh((y0, y1, x0, x1))
+
+    def _finish_rect(self) -> None:
+        start, end = self._rect_start, self._rect_end
+        self._rect_start = self._rect_end = None
+        if self._pixels is None or start is None or end is None:
+            return
+        h, w = self._pixels.shape
+        if abs(end.x() - start.x()) < 3 or abs(end.y() - start.y()) < 3:
+            self.update()
+            return   # a click or a sliver (in widget px): keep the previous rectangle
+        ax, ay = self._image_coords(start.x(), start.y())
+        bx, by = self._image_coords(end.x(), end.y())
+        x0, x1 = max(0, min(ax, bx)), min(w, max(ax, bx) + 1)
+        y0, y1 = max(0, min(ay, by)), min(h, max(ay, by) + 1)
+        if x1 - x0 < 1 or y1 - y0 < 1:
+            self.update()
+            return   # entirely outside the image
+        self._push_undo()
+        self._crop_rect = (x0, y0, x1, y1)
+        self.annotation_changed.emit()
+        self.update()
+
+    def _draw_annotations(self, painter: QPainter, r: QRect) -> None:
+        """Mask overlay, crop rectangle (with dimmed outside), polygon in
+        progress, rectangle rubber band and the brush cursor."""
+        if self._mask_qimage is not None and self._mask_nonempty:
+            painter.drawImage(r, self._mask_qimage)
+
+        if self._crop_rect is not None:
+            x0, y0, x1, y1 = self._crop_rect
+            sx0, sy0 = self._screen_coords(x0, y0)
+            sx1, sy1 = self._screen_coords(x1, y1)
+            rr   = QRect(QPoint(sx0, sy0), QPoint(sx1 - 1, sy1 - 1))
+            full = self.rect()
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(0, 0, 0, 120))
+            painter.drawRect(QRect(full.left(), full.top(), full.width(),
+                                   max(0, rr.top() - full.top())))
+            painter.drawRect(QRect(full.left(), rr.bottom() + 1, full.width(),
+                                   max(0, full.bottom() - rr.bottom())))
+            painter.drawRect(QRect(full.left(), rr.top(),
+                                   max(0, rr.left() - full.left()), rr.height()))
+            painter.drawRect(QRect(rr.right() + 1, rr.top(),
+                                   max(0, full.right() - rr.right()), rr.height()))
+            painter.setPen(QPen(QColor(*_CROP_RGB), 2))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRect(rr)
+
+        if self._rect_start is not None and self._rect_end is not None:
+            painter.setPen(QPen(QColor(*_CROP_RGB, 220), 1, Qt.DashLine))
+            painter.setBrush(QColor(*_CROP_RGB, 25))
+            painter.drawRect(QRect(self._rect_start, self._rect_end).normalized())
+
+        if self._poly_pts:
+            pts = [QPoint(*self._screen_coords(x, y)) for x, y in self._poly_pts]
+            painter.setBrush(Qt.NoBrush)
+            if len(pts) >= 2:
+                painter.setPen(QPen(QColor(*_MASK_RGB), 2))
+                painter.drawPolyline(QPolygon(pts))
+            if self._cursor_pos is not None:
+                painter.setPen(QPen(QColor(255, 255, 255, 160), 1, Qt.DashLine))
+                painter.drawLine(pts[-1], self._cursor_pos)
+                if len(pts) >= 2:
+                    painter.drawLine(self._cursor_pos, pts[0])
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(*_MASK_RGB))
+            for p in pts:
+                painter.drawRect(p.x() - 2, p.y() - 2, 5, 5)
+
+        if self._wl_mode == "paint" and self._cursor_pos is not None:
+            rx = self._brush_r * r.width()  / max(1, self._qimage.width())
+            ry = self._brush_r * r.height() / max(1, self._qimage.height())
+            c  = QColor(*_MASK_RGB) if self._erase else QColor(255, 255, 255, 200)
+            painter.setPen(QPen(c, 1))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawEllipse(QPointF(self._cursor_pos), rx, ry)
 
     # ── Rendering ──────────────────────────────────────────────────────────────
 
@@ -208,6 +476,7 @@ class ImageCanvas(QWidget):
 
         r = self._dest_rect()
         painter.drawImage(r, self._qimage)
+        self._draw_annotations(painter, r)
 
         # ROI rubber-band (rectangular W/L mode)
         if self._roi_start is not None and self._roi_end is not None:
@@ -344,6 +613,24 @@ class ImageCanvas(QWidget):
                 self._lasso_screen = [(event.x(), event.y())]
             elif self._wl_mode == "tc":
                 self._tc_handle_click(event.pos())
+            elif self._wl_mode == "paint":
+                if self._mask is not None:
+                    ix, iy = self._image_coords(event.x(), event.y())
+                    self._push_undo()
+                    self._paint_at(ix, iy)
+                    if not self._erase:
+                        self._mask_nonempty = True
+                    self._stroke_last = (ix, iy)
+                    self.update()
+            elif self._wl_mode == "poly":
+                if self._pixels is not None:
+                    ix, iy = self._image_coords(event.x(), event.y())
+                    if not self._poly_pts or self._poly_pts[-1] != (ix, iy):
+                        self._poly_pts.append((ix, iy))
+                    self.update()
+            elif self._wl_mode == "rect":
+                self._rect_start = event.pos()
+                self._rect_end   = event.pos()
         elif event.button() == Qt.RightButton:
             self._right_press   = event.pos()
             self._pan_at_press  = (self._pan_x, self._pan_y)
@@ -368,7 +655,19 @@ class ImageCanvas(QWidget):
                 if abs(event.x() - lx) > 3 or abs(event.y() - ly) > 3:
                     self._lasso_screen.append((event.x(), event.y()))
                     self.update()
+            elif self._wl_mode == "paint" and self._stroke_last is not None:
+                ix, iy = self._image_coords(event.x(), event.y())
+                self._paint_segment(self._stroke_last, (ix, iy))
+                self._stroke_last = (ix, iy)
+                self.update()
+            elif self._wl_mode == "rect" and self._rect_start is not None:
+                self._rect_end = event.pos()
+                self.update()
             # TC mode: no drag action (clicks only)
+
+        if self._wl_mode in ("paint", "poly"):
+            self._cursor_pos = event.pos()   # brush circle / polygon rubber line
+            self.update()
 
         if event.buttons() & Qt.RightButton and self._right_press is not None:
             dx = event.x() - self._right_press.x()
@@ -399,14 +698,47 @@ class ImageCanvas(QWidget):
                 self.update()
             elif self._wl_mode == "roi_tc":
                 self._finish_lasso()
+            elif self._wl_mode == "paint":
+                if self._stroke_last is not None:
+                    self._stroke_last = None
+                    self.annotation_changed.emit()
+            elif self._wl_mode == "rect":
+                self._finish_rect()
         elif event.button() == Qt.RightButton:
             if not self._right_dragged and self._right_press is not None:
                 if self._wl_mode == "tc":
                     self._tc_handle_right(self._right_press)
                 elif self._wl_mode == "roi_tc":
                     self._roi_tc_remove_nearest(self._right_press)
+                elif self._wl_mode == "poly" and self._poly_pts:
+                    self._poly_pts.pop()       # right-click: drop last vertex
+                    self.update()
             self._right_press   = None
             self._right_dragged = False
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        if self._wl_mode == "poly" and event.button() == Qt.LeftButton:
+            self._finish_polygon()
+            return
+        if self._wl_mode in ("paint", "rect"):
+            return   # Qt would replay it as a press: no stray dot / rectangle
+        super().mouseDoubleClickEvent(event)
+
+    def keyPressEvent(self, event) -> None:
+        if self._wl_mode == "poly":
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                self._finish_polygon()
+                return
+            if event.key() == Qt.Key_Escape:
+                self._poly_pts = []
+                self.update()
+                return
+        super().keyPressEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        self._cursor_pos = None
+        self.update()
+        super().leaveEvent(event)
 
     def wheelEvent(self, event) -> None:
         event.ignore()

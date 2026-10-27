@@ -1,0 +1,18 @@
+{
+ "seed": 99,
+ "actions": 60,
+ "elapsed": 11.2,
+ "violations": 2,
+ "manifest_rows": 0,
+ "saves": 3,
+ "shapes": {
+  "bpd1_20100101_1": [
+   2044,
+   1514
+  ]
+ },
+ "stale": [],
+ "kinds": [
+  "tool_sync"
+ ]
+}

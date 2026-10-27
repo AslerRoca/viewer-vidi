@@ -1,0 +1,44 @@
+{
+ "seed": 42,
+ "actions": 400,
+ "elapsed": 15.0,
+ "violations": 4,
+ "manifest_rows": 4,
+ "saves": 28,
+ "shapes": {
+  "C": [
+   288,
+   384
+  ],
+  "bpd1_20100101_1": [
+   2044,
+   1514
+  ],
+  "bpd3_20100502_2": [
+   2570,
+   2040
+  ],
+  "synth2d_160x120": [
+   160,
+   120
+  ],
+  "synth_300x200": [
+   200,
+   300
+  ],
+  "bpd3_20100419_1": [
+   2570,
+   2040
+  ],
+  "bpd1_20100101_2": [
+   2044,
+   1514
+  ]
+ },
+ "stale": [
+  "stale synth2d_160x120_roi.png on disk not listed in manifest row"
+ ],
+ "kinds": [
+  "tool_sync"
+ ]
+}

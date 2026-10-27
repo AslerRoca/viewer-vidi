@@ -1,0 +1,94 @@
+[
+ {
+  "idx": 24,
+  "advance": true,
+  "pre": {
+   "mask_px": 0,
+   "rect": [
+    81,
+    84,
+    1402,
+    1335
+   ],
+   "index": 0,
+   "shape": [
+    2044,
+    1514
+   ],
+   "shown": "/media/zsk/ressd/research/alldata_backup/dicom/original/bpd3_20100502_1.dcm",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed99/ws/bpd1_20100101_1.dcm",
+   "dock_visible": false,
+   "invert": false,
+   "wl": [
+    3125.0,
+    833.0
+   ]
+  },
+  "dialogs": [
+   [
+    "QMessageBox",
+    "Panel mismatch",
+    "The active panel shows\n/media/zsk/ressd/research/alldata_backup/dicom/original/bpd3_20100502_1.dcm\n\nbut the current item is\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed99/ws/bpd1_20100101_1.dcm\n\nDouble-click the item in the list to load it, then save."
+   ]
+  ],
+  "status": "Nothing to undo."
+ },
+ {
+  "idx": 45,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 0,
+   "shape": [
+    252,
+    296
+   ],
+   "shown": "/media/zsk/ressd/research/alldata_backup/project_workstation/PhD/image_exsample/3.png",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed99/ws/bpd1_20100101_1.dcm",
+   "dock_visible": false,
+   "invert": false,
+   "wl": [
+    156.0,
+    255.0
+   ]
+  },
+  "dialogs": [
+   [
+    "QMessageBox",
+    "Panel mismatch",
+    "The active panel shows\n/media/zsk/ressd/research/alldata_backup/project_workstation/PhD/image_exsample/3.png\n\nbut the current item is\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed99/ws/bpd1_20100101_1.dcm\n\nDouble-click the item in the list to load it, then save."
+   ]
+  ],
+  "status": "Nothing to undo."
+ },
+ {
+  "idx": 59,
+  "advance": false,
+  "pre": {
+   "mask_px": 0,
+   "rect": null,
+   "index": 0,
+   "shape": [
+    2570,
+    2040
+   ],
+   "shown": "/media/zsk/ressd/research/alldata_backup/dicom/original/bpd3_20100419_1.dcm",
+   "item": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed99/ws/bpd1_20100101_1.dcm",
+   "dock_visible": false,
+   "invert": false,
+   "wl": [
+    81.87730061349691,
+    55.82208588957053
+   ]
+  },
+  "dialogs": [
+   [
+    "QMessageBox",
+    "Panel mismatch",
+    "The active panel shows\n/media/zsk/ressd/research/alldata_backup/dicom/original/bpd3_20100419_1.dcm\n\nbut the current item is\n/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed99/ws/bpd1_20100101_1.dcm\n\nDouble-click the item in the list to load it, then save."
+   ]
+  ],
+  "status": "Nothing to undo."
+ }
+]

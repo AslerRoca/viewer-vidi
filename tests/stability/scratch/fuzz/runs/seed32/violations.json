@@ -1,0 +1,12 @@
+[
+ {
+  "kind": "audit_mask_shape",
+  "idx": -1,
+  "msg": "C_mask.png shape (288, 384) != item pixel shape (56, 288)"
+ },
+ {
+  "kind": "audit_nifti_mask_shape",
+  "idx": -1,
+  "msg": "C_mask.nii.gz shape (384, 288, 1) != (288, 56, 1)"
+ }
+]

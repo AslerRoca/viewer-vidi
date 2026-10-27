@@ -1,0 +1,152 @@
+[
+ {
+  "kind": "tool_sync",
+  "idx": 23,
+  "msg": "after roi_btn: dock visible, tool drag but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 23,
+   "roi_checked": true
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 41,
+  "msg": "after load_file: dock visible, tool rect but active canvas mode drag",
+  "action": {
+   "name": "load_file",
+   "path": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed4/ws/bpd3_20100502_2.dcm",
+   "idx": 41
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 62,
+  "msg": "after load_file: dock visible, tool paint but active canvas mode drag",
+  "action": {
+   "name": "load_file",
+   "path": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed4/ws/synth2d_160x120.nii.gz",
+   "idx": 62
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 117,
+  "msg": "after load_file: dock visible, tool paint but active canvas mode drag",
+  "action": {
+   "name": "load_file",
+   "path": "/media/zsk/ressd/research/alldata_backup/dicom/original/bpd3_20100419_5.dcm",
+   "idx": 117
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 213,
+  "msg": "after load_file: dock visible, tool poly but active canvas mode drag",
+  "action": {
+   "name": "load_file",
+   "path": "/media/zsk/ressd/research/alldata_backup/dicom/original/bpd3_20100427_1.dcm",
+   "idx": 213
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 226,
+  "msg": "after roi_btn: dock visible, tool poly but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 226,
+   "roi_checked": true
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 239,
+  "msg": "after load_file: dock visible, tool poly but active canvas mode drag",
+  "action": {
+   "name": "load_file",
+   "path": "/media/zsk/ressd/research/alldata_backup/dicom/original/bpd1_20100101_2.dcm",
+   "idx": 239
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 282,
+  "msg": "after roi_btn: dock visible, tool paint but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 282,
+   "roi_checked": true
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 296,
+  "msg": "after roi_btn: dock visible, tool poly but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 296,
+   "roi_checked": true
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 311,
+  "msg": "after load_file: dock visible, tool poly but active canvas mode drag",
+  "action": {
+   "name": "load_file",
+   "path": "/media/zsk/ressd/research/alldata_backup/dicom/original/bpd3_20100423_1.dcm",
+   "idx": 311
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 346,
+  "msg": "after load_file: dock visible, tool paint but active canvas mode drag",
+  "action": {
+   "name": "load_file",
+   "path": "/media/zsk/ressd/research/alldata_backup/dicom/original/bpd1_20100101_2.dcm",
+   "idx": 346
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 424,
+  "msg": "after roi_btn: dock visible, tool drag but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 424,
+   "roi_checked": true
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 449,
+  "msg": "after roi_btn: dock visible, tool rect but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 449,
+   "roi_checked": true
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 457,
+  "msg": "after load_file: dock visible, tool rect but active canvas mode drag",
+  "action": {
+   "name": "load_file",
+   "path": "/media/zsk/ressd/research/alldata_backup/dicom/original/bpd3_20100420_2.dcm",
+   "idx": 457
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 459,
+  "msg": "after load_file: dock visible, tool rect but active canvas mode drag",
+  "action": {
+   "name": "load_file",
+   "path": "/tmp/claude-1000/-home-zsk/714d8704-0f43-42f9-ba79-d4ec2a9ad51f/scratchpad/stab/fuzz/runs/seed4/ws/bpd3_20100502_2.dcm",
+   "idx": 459
+  }
+ }
+]

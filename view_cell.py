@@ -48,6 +48,7 @@ class ViewCell(QWidget):
     wl_changed     = pyqtSignal(float, float)
     pixel_hovered  = pyqtSignal(int, int, float)
     double_clicked = pyqtSignal()          # request fullscreen toggle
+    load_failed    = pyqtSignal(str)       # loader reported an error for the last request
 
     # True when TiltWheelReader delivers tilt from the kernel device instead
     # (Qt's X11 backend loses isolated horizontal detents — see tilt_evdev.py).
@@ -72,11 +73,14 @@ class ViewCell(QWidget):
 
         self._tc_window    = None   # TimeCourseWindow (floating) or embedded panel
         self._tc_panel_ref = None   # injected shared embedded panel (set by MainWindow)
+        self._requested_meta = None # meta of the last load_meta() — stale signals are dropped
+        self._load_error: str = ""
 
         self._loader = LoaderWorker()
         self._loader.headers_ready.connect(self._on_headers_ready)
         self._loader.pixels_ready.connect(self._on_pixels_ready)
         self._loader.load_complete.connect(self._on_load_complete)
+        self._loader.load_error.connect(self._on_load_error)
         self._loader.progress.connect(self._on_progress)
 
         self._timer = QTimer(self)
@@ -265,6 +269,8 @@ class ViewCell(QWidget):
         self._canvas.set_image(None)
         self._canvas.set_overlay(None)
         self._set_controls_visible(False, False)
+        self._requested_meta = meta
+        self._load_error = ""
         self._loader.request_load(meta)
 
     def set_wl(self, wc: float, ww: float) -> None:
@@ -285,6 +291,72 @@ class ViewCell(QWidget):
     def series_data(self) -> SeriesData | None:
         return self._sd
 
+    def canvas(self) -> ImageCanvas:
+        """The panel's ImageCanvas (annotation tools live there)."""
+        return self._canvas
+
+    def is_loading(self) -> bool:
+        return self._loader.isRunning()
+
+    def load_error_text(self) -> str:
+        """Why the last load failed ('' when it did not)."""
+        return self._load_error
+
+    def reset_mode_buttons(self) -> None:
+        """Uncheck the panel's own ROI / TC / ROI-TC toggles without side
+        effects (used when an external tool takes over the canvas mode)."""
+        for btn in (self._roi_btn, self._tc_btn, self._roi_tc_btn):
+            btn.blockSignals(True)
+            btn.setChecked(False)
+            btn.blockSignals(False)
+
+    def display_spacing(self) -> tuple[float, float]:
+        """(row_mm, col_mm) of the slice on screen — reformatted planes have
+        the slice spacing along their rows."""
+        sd = self._sd
+        if sd is None:
+            return (1.0, 1.0)
+        pr, pc = (float(sd.pixel_spacing[0] or 1.0), float(sd.pixel_spacing[1] or 1.0))
+        axis = self._current_axis() if sd.series_type in (SeriesType.S3D, SeriesType.S3DT) else "z"
+        if axis == "z":
+            return (pr, pc)
+        sl = float(sd.slice_spacing or 1.0)
+        return (sl, pc) if axis == "y" else (sl, pr)
+
+    def display_view(self) -> str:
+        """Which slice/time/plane is on screen, for the export manifest
+        ('' for a plain 2-D image)."""
+        sd = self._sd
+        if sd is None:
+            return ""
+        parts = []
+        st = sd.series_type
+        if st in (SeriesType.S3D, SeriesType.S3DT):
+            axis = self._current_axis()
+            idx = {"z": self._cur_z, "y": self._cur_y, "x": self._cur_x}[axis]
+            parts.append(f"{self._view_mode} {axis}={idx}")
+        elif st == SeriesType.MULTI:
+            parts.append(f"group={self._cur_z}")
+        if st in (SeriesType.S2DT, SeriesType.S3DT):
+            parts.append(f"t={self._cur_t}")
+        return " ".join(parts)
+
+    def _slice_key(self):
+        return (self._view_mode, self._cur_z, self._cur_y, self._cur_x, self._cur_t)
+
+    @staticmethod
+    def _same_request(sd_meta, requested) -> bool:
+        """Does a SeriesData belong to the last requested load? Single series
+        reuse the meta object; grouped loads build a stand-in meta, so fall
+        back to comparing the paths."""
+        if requested is None or sd_meta is requested:
+            return True
+        a = getattr(sd_meta, "series_dir", None)
+        b = getattr(requested, "series_dir", None)
+        if a is not None and b is not None:
+            return a == b
+        return getattr(sd_meta, "study_dir", None) == getattr(requested, "study_dir", None)
+
     def reset_wl(self) -> None:
         if self._sd:
             self._canvas.set_wl(self._sd.window_center, self._sd.window_width)
@@ -299,6 +371,8 @@ class ViewCell(QWidget):
     # ── Loader slots ───────────────────────────────────────────────────────
 
     def _on_headers_ready(self, sd: SeriesData) -> None:
+        if not self._same_request(sd.meta, self._requested_meta):
+            return   # queued signal from a load that was cancelled by load_meta()
         self._sd = sd
         st = sd.series_type
         is_3d  = st in (SeriesType.S3D, SeriesType.S3DT)
@@ -359,6 +433,11 @@ class ViewCell(QWidget):
     def _on_load_complete(self) -> None:
         pass
 
+    def _on_load_error(self, msg: str) -> None:
+        self._load_error = msg or "unknown error"
+        self._canvas.set_label(f"Load failed: {self._truncate(self._load_error, 60)}")
+        self.load_failed.emit(self._load_error)
+
     def _on_progress(self, loaded: int, total: int) -> None:
         self._canvas.set_label(f"{loaded}/{total}")
 
@@ -368,7 +447,7 @@ class ViewCell(QWidget):
         if self._vol is None or self._sd is None:
             return
         sl, asp = self._extract_slice()
-        self._canvas.set_image(sl, asp, reset_view=False)
+        self._canvas.set_image(sl, asp, reset_view=False, key=self._slice_key())
         self._canvas.set_label("")
         self._update_info_overlay()
 
@@ -528,6 +607,9 @@ class ViewCell(QWidget):
         if self.is_tc_active():
             panel.setVisible(True)
             self._on_tc_points_changed(self._canvas.tc_points())
+        elif self._roi_tc_btn.isChecked():
+            panel.setVisible(True)
+            self._on_roi_tc_changed(list(self._canvas._roi_tc_polys))
         else:
             panel.setVisible(False)
 
@@ -848,6 +930,8 @@ class ViewCell(QWidget):
                     self._info_btn.toggle()
                     return True
             elif t == QEvent.MouseButtonDblClick:
+                if self._canvas.wl_mode() in ("paint", "poly", "rect"):
+                    return False  # annotation tools own the double-click (poly closes)
                 self.double_clicked.emit()
                 return True   # consume: prevent W/L drag start on dbl-click
             elif t == QEvent.Wheel:

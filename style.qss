@@ -434,3 +434,90 @@ QSplitter#quadSplitterH::handle:hover,
 QSplitter#quadSplitterV::handle:hover {
     background-color: #7c8fbd;
 }
+
+/* ─── Annotation workspace dock ───────────────────────────── */
+QPushButton#wsBtn:checked {
+    color: #7c8fbd;
+    border-color: #7c8fbd;
+}
+
+QDockWidget::title {
+    background-color: #181825;
+    padding: 5px 8px;
+    border-bottom: 1px solid #45475a;
+    color: #6c7086;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+QGroupBox {
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    margin-top: 10px;
+    padding: 10px 6px 6px 6px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 8px;
+    padding: 0 4px;
+    color: #6c7086;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+QListWidget {
+    background-color: #181825;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+QListWidget::item {
+    padding: 2px 4px;
+}
+
+QListWidget::item:selected {
+    background-color: #313244;
+    color: #cdd6f4;
+}
+
+QCheckBox {
+    spacing: 5px;
+    background: transparent;
+}
+
+QCheckBox::indicator {
+    width: 13px;
+    height: 13px;
+    border: 1px solid #45475a;
+    border-radius: 3px;
+    background: #2a2a3e;
+}
+
+QCheckBox::indicator:checked {
+    background: #7c8fbd;
+    border-color: #7c8fbd;
+}
+
+QLabel#dockDim {
+    color: #6c7086;
+    font-size: 11px;
+    background: transparent;
+}
+
+QPushButton#toolBtn:checked {
+    background-color: #332e0d;
+    color: #f5c842;
+    border-color: #f5c842;
+}
+
+QPushButton#deleteBtn:enabled {
+    color: #f38ba8;
+    border-color: #f38ba8;
+}
+
+QPushButton#deleteBtn[restore="true"] {
+    color: #a6e3a1;
+    border-color: #a6e3a1;
+}

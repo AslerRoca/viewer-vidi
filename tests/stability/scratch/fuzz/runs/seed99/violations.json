@@ -1,0 +1,22 @@
+[
+ {
+  "kind": "tool_sync",
+  "idx": 5,
+  "msg": "after load_file: dock visible, tool paint but active canvas mode drag",
+  "action": {
+   "name": "load_file",
+   "path": "/media/zsk/ressd/research/alldata_backup/project_workstation/PhD/image_exsample/3.png",
+   "idx": 5
+  }
+ },
+ {
+  "kind": "tool_sync",
+  "idx": 7,
+  "msg": "after roi_btn: dock visible, tool paint but active canvas mode roi",
+  "action": {
+   "name": "roi_btn",
+   "idx": 7,
+   "roi_checked": true
+  }
+ }
+]

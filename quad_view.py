@@ -72,6 +72,9 @@ class QuadView(QWidget):
     def cell_at(self, idx: int) -> ViewCell:
         return self._cells[idx]
 
+    def cells(self) -> list[ViewCell]:
+        return list(self._cells)
+
     def set_wl(self, wc: float, ww: float) -> None:
         self._active.set_wl(wc, ww)
 
