@@ -216,7 +216,8 @@ dock._fmt_chk["jpeg"].setChecked(False)
 dock._save(advance=False); app.processEvents()
 jp = os.path.join(G11, "vidi_output", "jpeg", "bpd1_20100101_1_roi.jpg")
 row = W.read_manifest(dock._ws.manifest_path)["bpd1_20100101_1"]
-check("G11 re-save removes stale products and uses ';' in files", not os.path.isfile(jp) and ";" not in row["files"].strip(";") or row["files"].count("/") == 2, row["files"])
+check("G11 re-save removes stale products and uses ';' in files", not os.path.isfile(jp)
+      and row["files"].split(";") == [f"png/bpd1_20100101_1_{s}.png" for s in ("image", "roi", "rect_mask")], row["files"])
 check("G11 manifest files match disk", all(os.path.isfile(os.path.join(G11, "vidi_output", f)) for f in row["files"].split(";")))
 
 # canvas: undo restores the rectangle; tiny drags ignored

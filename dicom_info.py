@@ -230,9 +230,12 @@ def detail_groups(path: str) -> list[tuple[str, list[str]]]:
         g.append(f"Orient {_text(ds, 'PatientOrientation')}")
     if _text(ds, "Laterality"):
         g.append(f"Laterality {_text(ds, 'Laterality')}")
+    photometric = _text(ds, "PhotometricInterpretation")
+    if photometric.upper() == "MONOCHROME1":
+        photometric += " (shown flipped: high = white)"   # windowing.apply_rescale
     row = " ".join(x for x in (
         f"{_text(ds, 'BitsStored')} bit" if _text(ds, "BitsStored") else "",
-        _text(ds, "PhotometricInterpretation")) if x)
+        photometric) if x)
     if row:
         g.append(row)
     slope = _num(ds, "RescaleSlope")

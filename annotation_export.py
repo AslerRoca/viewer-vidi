@@ -7,10 +7,18 @@ subdirectory under the output dir so mixed-format outputs never collide:
     <out_dir>/png/<stem>_roi.png       <out_dir>/nifti/<stem>_roi.nii.gz
     <out_dir>/png/<stem>_image.png     ...
 
+With a crop rectangle, "mask" also means <stem>_rect_mask: the rectangle
+itself as a mask on the whole image (1 inside), whether or not anything was
+painted — the counterpart of <stem>_image for whoever needs the box as a label.
+
 PNG/JPEG are 8-bit and get the viewer's current window/level (and invert)
 applied, so the file matches what is on screen. NIfTI keeps the raw float32
 values (after DICOM rescale) with pixel spacing in the affine; masks are
 uint8 0/1 (0/255 in PNG/JPEG).
+
+Besides the products, every save keeps the painted mask itself in
+<out_dir>/work/<stem>_mask.png, whatever products were ticked: it is what a
+reopened item gets back, so the mask is never lost to an unticked box.
 """
 from __future__ import annotations
 
@@ -21,12 +29,13 @@ import numpy as np
 
 FORMATS = ("png", "jpeg", "nifti")
 _EXT = {"png": ".png", "jpeg": ".jpg", "nifti": ".nii.gz"}
+WORK_DIR = "work"               # <out_dir>/work/<stem>_mask.png — the mask as last saved
 
 
 @dataclass
 class ExportOptions:
     formats: tuple[str, ...]        # subset of FORMATS, in output order
-    save_mask: bool = True          # <stem>_mask (+ <stem>_roi_mask when a rect exists)
+    save_mask: bool = True          # <stem>_mask (+ <stem>_roi_mask) and, with a rect, <stem>_rect_mask
     save_crop: bool = True          # <stem>_roi — the rectangle cut from the image
     save_image: bool = False        # <stem>_image — the whole displayed slice
 
@@ -80,6 +89,10 @@ def export_item(out_dir: str, inp: ExportInput, opts: ExportOptions) -> list[str
             products.append(("roi", inp.pixels[y0:y1, x0:x1], "image", (x0, y0)))
         if has_mask:
             products.append(("roi_mask", inp.mask[y0:y1, x0:x1], "mask", (x0, y0)))
+        if opts.save_mask:
+            box = np.zeros(inp.pixels.shape[:2], dtype=np.uint8)
+            box[y0:y1, x0:x1] = 1
+            products.append(("rect_mask", box, "mask", (0, 0)))
 
     if not products:
         return []
@@ -95,6 +108,44 @@ def export_item(out_dir: str, inp: ExportInput, opts: ExportOptions) -> list[str
             _write(fmt, os.path.join(sub, fn), arr, kind, inp, origin)
             written.append(os.path.join(fmt, fn))
     return written
+
+
+def write_work_mask(out_dir: str, stem: str, mask: np.ndarray | None) -> None:
+    """Keep *mask* as the saved annotation of *stem*; an empty or missing
+    mask removes the copy."""
+    path = os.path.join(out_dir, WORK_DIR, f"{stem}_mask.png")
+    if mask is None or not mask.any():
+        if os.path.isfile(path):
+            os.remove(path)
+        return
+    from PIL import Image
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    Image.fromarray((np.asarray(mask) > 0).astype(np.uint8) * 255).save(path)
+
+
+def read_saved_mask(out_dir: str, stem: str, files=()) -> np.ndarray | None:
+    """The mask of *stem* as last saved — uint8 (H, W) 0/1 — or None. Read
+    from the work copy; an item saved before work copies existed falls back
+    to a mask product named in *files* (its manifest cell): PNG, else NIfTI."""
+    products = (os.path.join("png", f"{stem}_mask.png"),
+                os.path.join("nifti", f"{stem}_mask.nii.gz"))
+    for rel in (os.path.join(WORK_DIR, f"{stem}_mask.png"),
+                *(p for p in products if p in files)):
+        path = os.path.join(out_dir, rel)
+        if not os.path.isfile(path):
+            continue
+        try:
+            if path.endswith(".png"):
+                from PIL import Image
+                with Image.open(path) as im:
+                    arr = np.array(im.convert("L"))
+            else:
+                import nibabel as nib
+                arr = np.asarray(nib.load(path).dataobj)[:, :, 0].T
+            return (arr > 0).astype(np.uint8)
+        except Exception:      # unreadable copy: try the next one
+            continue
+    return None
 
 
 def _clip_rect(rect, shape) -> tuple[int, int, int, int] | None:

@@ -15,7 +15,11 @@ from .data_model import SeriesMeta, GroupedSeriesMeta
 from .tilt_evdev import TiltWheelReader
 from .tree_panel import StudyTreeWidget
 from .quad_view import QuadView
+from .report_panel import ReportPanel
 from .view_cell import ViewCell
+
+# Reports open over the right two image panels and this much of the left two.
+_REPORT_EXTRA = 220
 
 
 class MainWindow(QMainWindow):
@@ -81,6 +85,13 @@ class MainWindow(QMainWindow):
         self._ws_btn.setToolTip("Annotation workspace: segment masks / crop ROIs over a "
                                 "directory or list of images and export them (Ctrl+Shift+W)")
 
+        self._report_btn = QPushButton("Reports")
+        self._report_btn.setObjectName("reportBtn")
+        self._report_btn.setCheckable(True)
+        self._report_btn.setToolTip("Read text reports — a folder of .txt / .rtf files or CSV tables\n"
+                                    "with one report per row — in place of the right two image "
+                                    "panels (Ctrl+Shift+R)")
+
         self._type_badge = QLabel("")
         self._type_badge.setObjectName("typeLabel")
         self._type_badge.setMinimumWidth(50)
@@ -96,12 +107,16 @@ class MainWindow(QMainWindow):
         tb_lay.addWidget(self._ww_spin)
         tb_lay.addWidget(reset_btn)
         tb_lay.addWidget(self._ws_btn)
+        tb_lay.addWidget(self._report_btn)
         tb_lay.addStretch(1)
         tb_lay.addWidget(self._type_badge)
 
-        # ── Tree + quad viewer splitter ────────────────────────────────────
+        # ── Tree + quad viewer + reports splitter ──────────────────────────
         self._tree = StudyTreeWidget()
         self._quad = QuadView()
+        self._report_panel = ReportPanel()      # hidden until requested
+        self._report_panel.hide()
+        self._report_width = 0                  # as left by the user; 0 = not shown yet
 
         self._tree.setMinimumWidth(200)
         self._tree.setMaximumWidth(450)
@@ -109,11 +124,13 @@ class MainWindow(QMainWindow):
         self._splitter = QSplitter(Qt.Horizontal)
         self._splitter.addWidget(self._tree)
         self._splitter.addWidget(self._quad)
-        self._splitter.setSizes([TREE_WIDTH, 1100])
+        self._splitter.addWidget(self._report_panel)
+        self._splitter.setSizes([TREE_WIDTH, 1100, 0])
         self._splitter.setStretchFactor(1, 1)
-        # Don't let a splitter drag collapse the tree to an invisible sliver —
-        # hiding goes through the ☰ button / Ctrl+B, which can bring it back.
-        self._splitter.setCollapsible(0, False)
+        # Don't let a splitter drag collapse a pane to an invisible sliver —
+        # hiding the tree or the reports goes through their toolbar buttons /
+        # shortcuts, which can bring them back.
+        self._splitter.setChildrenCollapsible(False)
         self._tree_width = TREE_WIDTH
 
         # ── Status bar ─────────────────────────────────────────────────────
@@ -159,6 +176,7 @@ class MainWindow(QMainWindow):
         # Dock shortcuts are application-wide so they keep working when the
         # dock floats; each handler no-ops while the dock is hidden.
         for keys, slot in (("Ctrl+Shift+W", self._ws_btn.toggle),
+                           ("Ctrl+Shift+R", self._report_btn.toggle),
                            ("Ctrl+S", self._dock.save_and_next),
                            ("Ctrl+Z", self._dock.undo),
                            (Qt.Key_Delete, self._dock.toggle_delete),
@@ -172,6 +190,12 @@ class MainWindow(QMainWindow):
         self._dock.visibilityChanged.connect(self._on_dock_visibility)
         self._tree.root_changed.connect(self._dock.set_start_dir)
         self._quad.active_cell_changed.connect(self._dock.on_active_cell_changed)
+        # A saved item leaves the panel not inverted, also for the item that follows.
+        self._dock.item_saved.connect(lambda: self._invert_btn.setChecked(False))
+
+        # Reports panel ↔ toolbar button
+        self._report_btn.toggled.connect(self._on_report_btn)
+        self._tree.root_changed.connect(self._report_panel.set_start_dir)
 
         # Tree → active cell load
         self._tree.series_selected.connect(self._on_series_selected)
@@ -284,8 +308,8 @@ class MainWindow(QMainWindow):
             self._tree.hide()
         else:
             self._tree.show()
-            total = sum(self._splitter.sizes())
-            self._splitter.setSizes([self._tree_width, total - self._tree_width])
+            _, quad_w, report_w = self._splitter.sizes()
+            self._splitter.setSizes([self._tree_width, quad_w - self._tree_width, report_w])
         self._sidebar_btn.blockSignals(True)
         self._sidebar_btn.setChecked(self._tree.isVisible())
         self._sidebar_btn.blockSignals(False)
@@ -299,6 +323,24 @@ class MainWindow(QMainWindow):
         self._ws_btn.setChecked(visible)
         self._ws_btn.blockSignals(False)
 
+    def _on_report_btn(self, checked: bool) -> None:
+        """Reports take the place of the right two image panels, which come
+        back (with whatever is loaded in them) when Reports are closed. The
+        width left by dragging the divider is kept for the next time."""
+        tree_w, quad_w, report_w = self._splitter.sizes()
+        if checked:
+            room = quad_w - self._quad.cell_at(0).minimumSizeHint().width()
+            report_w = min(self._report_width or quad_w // 2 + _REPORT_EXTRA, room)
+            self._quad.set_right_column_hidden(True)
+            self._report_panel.show()
+            self._splitter.setSizes([tree_w, quad_w - report_w, report_w])
+        else:
+            self._report_width = report_w
+            self._report_panel.hide()
+            self._quad.set_right_column_hidden(False)
+            self._splitter.setSizes([tree_w, quad_w + report_w, 0])
+
     def closeEvent(self, event) -> None:
         self._quad.cancel_all()
+        self._report_panel.shutdown()
         super().closeEvent(event)

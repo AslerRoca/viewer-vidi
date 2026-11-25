@@ -57,6 +57,7 @@ class SeriesData:
     flip_acq_cols:  bool = False          # flip acquisition-plane slices horizontally
     flip_reformat:  bool = False          # flip Z axis of reformatted (MPR) planes
     panel_labels:   tuple = ("ACQ", "MPR1", "MPR2")  # 3D display panel labels
+    photometric:    str  = ""             # PhotometricInterpretation of the source ('' if none)
 
 
 @dataclass
@@ -298,4 +299,5 @@ def build_series_data(
         flip_acq_cols=plane_info["flip_acq_cols"],
         flip_reformat=plane_info["flip_reformat"],
         panel_labels=plane_info["panel_labels"],
+        photometric=str(ds0.get("PhotometricInterpretation", "") or "").strip(),
     )

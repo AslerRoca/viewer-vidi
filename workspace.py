@@ -35,7 +35,8 @@ LIST_EXTS  = frozenset({".txt", ".lst", ".csv", ".tsv"})
 DEFAULT_OUT_DIR = "vidi_output"
 MANIFEST_NAME   = "manifest.csv"
 MANIFEST_FIELDS = ("stem", "source", "status", "saved_at", "view", "mask_pixels",
-                   "x0", "y0", "x1", "y1", "formats", "files")
+                   "x0", "y0", "x1", "y1", "formats", "files",
+                   "photometric", "invert", "wc", "ww", "wl_default")
 STATUS_SAVED    = "saved"
 STATUS_DELETED  = "deleted"          # the image was marked wrong; no products on disk
 FILES_SEP       = ";"                 # separator of the manifest 'files' column
@@ -52,6 +53,7 @@ class Item:
     path: str
     stem: str
     done: bool = False
+    empty: bool = False      # saved with neither a rectangle nor a mask (see row_is_empty)
     deleted: bool = False    # marked as a wrong picture (the file itself is kept)
     error: str = ""          # set when the viewer could not open the file
 
@@ -77,6 +79,10 @@ class Workspace:
     @property
     def n_done(self) -> int:
         return sum(1 for it in self.items if it.done)
+
+    @property
+    def n_empty(self) -> int:
+        return sum(1 for it in self.items if it.done and it.empty)
 
     @property
     def n_deleted(self) -> int:
@@ -307,8 +313,22 @@ def build_workspace(root: str, mode: str, paths: list[str],
     for p, s in zip(existing, stems):
         row = rows.get(s) if (p in reserved or (s in rows and not rows[s].get("source"))) else None
         deleted = bool(row) and row.get("status", "") == STATUS_DELETED
-        ws.items.append(Item(path=p, stem=s, done=bool(row) and not deleted, deleted=deleted))
+        ws.items.append(Item(path=p, stem=s, done=bool(row) and not deleted, deleted=deleted,
+                             empty=row_is_empty(row)))
     return ws
+
+
+def row_is_empty(row: dict | None) -> bool:
+    """A saved manifest row with neither a rectangle nor a mask: only the whole
+    image was written, so the item has no crop and no segmentation."""
+    if not row or row.get("status", "") == STATUS_DELETED:
+        return False
+    has_rect = all(str(row.get(k, "") or "").strip() for k in ("x0", "y0", "x1", "y1"))
+    try:
+        has_mask = float(row.get("mask_pixels", "") or 0) > 0
+    except (TypeError, ValueError):
+        has_mask = False
+    return not has_rect and not has_mask
 
 
 def source_keys(path: str, root: str) -> list[str]:

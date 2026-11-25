@@ -24,6 +24,7 @@ _MASK_RGB   = (239, 83, 80)     # red reads well over greyscale anatomy
 _MASK_ALPHA = 110
 _CROP_RGB   = (245, 200, 66)    # yellow, same family as the ROI W/L band
 _UNDO_DEPTH = 10                # mask snapshots kept for undo
+_GRAB_PX    = 6                 # an edge of the crop rectangle is grabbed within this (screen px)
 _CROSS_MODES = ("roi", "roi_tc", "tc", "paint", "poly", "rect")
 
 _DISKS: dict[int, np.ndarray] = {}
@@ -46,7 +47,8 @@ class ImageCanvas(QWidget):
       "roi"   — drag a rectangle; release sets W/L from region stats
       "paint" — brush paints (or erases) the segmentation mask
       "poly"  — click vertices, double-click/Enter fills the polygon into the mask
-      "rect"  — drag the crop rectangle (ROI export)
+      "rect"  — drag the crop rectangle (ROI export); drag one of its edges or
+                corners to adjust it
     """
 
     wl_changed          = pyqtSignal(float, float)
@@ -54,6 +56,7 @@ class ImageCanvas(QWidget):
     tc_points_changed   = pyqtSignal(list)    # list of (ix, iy) image coords
     roi_tc_polys_changed = pyqtSignal(object) # list of np.ndarray each (N,2) image (x,y)
     annotation_changed  = pyqtSignal()        # mask stroke / polygon / crop rect edited
+    context_requested   = pyqtSignal(QPoint)  # right-click without a drag (global position)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -127,6 +130,10 @@ class ImageCanvas(QWidget):
         self._crop_rect:     Optional[tuple[int, int, int, int]] = None  # x0,y0,x1,y1 excl.
         self._rect_start:    Optional[QPoint] = None
         self._rect_end:      Optional[QPoint] = None
+        # While an edge / corner of the crop rectangle is dragged:
+        # (x edge, y edge, press position, rectangle at the press) — see _rect_hit.
+        self._rect_grab:     Optional[tuple] = None
+        self._rect_edited:   bool = False              # that drag has moved an edge
         self._cursor_pos:    Optional[QPoint] = None   # brush/polygon cursor feedback
         self._image_key = None                          # slice/time/view the mask belongs to
 
@@ -196,6 +203,7 @@ class ImageCanvas(QWidget):
         self._poly_pts     = []
         self._rect_start   = None
         self._rect_end     = None
+        self._rect_grab    = None
         self._stroke_last  = None
         self.setCursor(Qt.CrossCursor if mode in _CROSS_MODES else Qt.ArrowCursor)
         self.update()
@@ -257,6 +265,25 @@ class ImageCanvas(QWidget):
         self.annotation_changed.emit()
         self.update()
 
+    def set_annotations(self, mask: Optional[np.ndarray],
+                        rect: Optional[tuple[int, int, int, int]]) -> None:
+        """Put a saved mask and crop rectangle back on the displayed image
+        (reopening an item). No undo step. A mask of another shape and a
+        rectangle that does not lie inside the image are left out."""
+        if self._mask is None:
+            return
+        h, w = self._mask.shape
+        if mask is not None and mask.shape == (h, w):
+            self._mask[:] = mask > 0
+            self._mask_refresh()
+            self._mask_nonempty = bool(self._mask.any())
+        if rect is not None:
+            x0, y0, x1, y1 = (int(v) for v in rect)
+            if 0 <= x0 < x1 <= w and 0 <= y0 < y1 <= h:
+                self._crop_rect = (x0, y0, x1, y1)
+        self.annotation_changed.emit()
+        self.update()
+
     def undo_annotation(self) -> bool:
         """Restore mask and rectangle from before the last stroke / polygon /
         rectangle / clear."""
@@ -273,6 +300,7 @@ class ImageCanvas(QWidget):
         self._undo        = []
         self._poly_pts    = []
         self._crop_rect   = None
+        self._rect_grab   = None
         self._stroke_last = None
         self._mask_nonempty = False
         if shape is None:
@@ -379,6 +407,60 @@ class ImageCanvas(QWidget):
         self.annotation_changed.emit()
         self.update()
 
+    def _rect_hit(self, pos: QPoint) -> Optional[tuple[int, int]]:
+        """Edges of the crop rectangle under *pos* in rect mode: (x, y) with
+        -1 = left / top edge, +1 = right / bottom edge, 0 = neither — both set
+        on a corner. None away from the edges."""
+        if self._wl_mode != "rect" or self._crop_rect is None:
+            return None
+        x0, y0, x1, y1 = self._crop_rect
+        sx0, sy0 = self._screen_coords(x0, y0)
+        sx1, sy1 = self._screen_coords(x1, y1)
+        px, py = pos.x(), pos.y()
+        if not (sx0 - _GRAB_PX <= px <= sx1 + _GRAB_PX and sy0 - _GRAB_PX <= py <= sy1 + _GRAB_PX):
+            return None
+        near = lambda p, lo, hi: (-1 if abs(p - lo) <= min(_GRAB_PX, abs(p - hi))
+                                  else 1 if abs(p - hi) <= _GRAB_PX else 0)
+        grab = near(px, sx0, sx1), near(py, sy0, sy1)
+        return grab if any(grab) else None
+
+    def _rect_cursor(self, grab: Optional[tuple[int, int]]) -> None:
+        """Resize cursor over an edge / corner of the crop rectangle, else the cross."""
+        gx, gy = grab or (0, 0)
+        shape = (Qt.CrossCursor if not (gx or gy) else Qt.SizeHorCursor if not gy
+                 else Qt.SizeVerCursor if not gx
+                 else Qt.SizeFDiagCursor if gx == gy else Qt.SizeBDiagCursor)
+        if self.cursor().shape() != shape:
+            self.setCursor(shape)
+
+    def _drag_rect_edges(self, pos: QPoint) -> None:
+        """Move the grabbed edge(s) by the distance dragged since the press.
+        They stay inside the image and the rectangle keeps at least one pixel.
+        One undo step per adjustment."""
+        if self._crop_rect is None or self._pixels is None:
+            return      # cleared or undone under the drag
+        gx, gy, press, (x0, y0, x1, y1) = self._rect_grab
+        h, w = self._pixels.shape
+        r = self._dest_rect()
+        dx = round((pos.x() - press.x()) * w / max(1, r.width()))
+        dy = round((pos.y() - press.y()) * h / max(1, r.height()))
+        if gx < 0:
+            x0 = max(0, min(x0 + dx, x1 - 1))
+        elif gx > 0:
+            x1 = min(w, max(x1 + dx, x0 + 1))
+        if gy < 0:
+            y0 = max(0, min(y0 + dy, y1 - 1))
+        elif gy > 0:
+            y1 = min(h, max(y1 + dy, y0 + 1))
+        if (x0, y0, x1, y1) == self._crop_rect:
+            return
+        if not self._rect_edited:
+            self._rect_edited = True
+            self._push_undo()
+        self._crop_rect = (x0, y0, x1, y1)
+        self.annotation_changed.emit()
+        self.update()
+
     def _draw_annotations(self, painter: QPainter, r: QRect) -> None:
         """Mask overlay, crop rectangle (with dimmed outside), polygon in
         progress, rectangle rubber band and the brush cursor."""
@@ -404,6 +486,14 @@ class ImageCanvas(QWidget):
             painter.setPen(QPen(QColor(*_CROP_RGB), 2))
             painter.setBrush(Qt.NoBrush)
             painter.drawRect(rr)
+            if self._wl_mode == "rect":     # handles: the corners and edges can be dragged
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(QColor(*_CROP_RGB))
+                c = rr.center()
+                for hx in (rr.left(), c.x(), rr.right()):
+                    for hy in (rr.top(), c.y(), rr.bottom()):
+                        if (hx, hy) != (c.x(), c.y()):
+                            painter.drawRect(hx - 3, hy - 3, 7, 7)
 
         if self._rect_start is not None and self._rect_end is not None:
             painter.setPen(QPen(QColor(*_CROP_RGB, 220), 1, Qt.DashLine))
@@ -629,8 +719,13 @@ class ImageCanvas(QWidget):
                         self._poly_pts.append((ix, iy))
                     self.update()
             elif self._wl_mode == "rect":
-                self._rect_start = event.pos()
-                self._rect_end   = event.pos()
+                grab = self._rect_hit(event.pos())
+                if grab is not None:        # adjust the rectangle instead of drawing a new one
+                    self._rect_grab   = (*grab, event.pos(), self._crop_rect)
+                    self._rect_edited = False
+                else:
+                    self._rect_start = event.pos()
+                    self._rect_end   = event.pos()
         elif event.button() == Qt.RightButton:
             self._right_press   = event.pos()
             self._pan_at_press  = (self._pan_x, self._pan_y)
@@ -660,10 +755,14 @@ class ImageCanvas(QWidget):
                 self._paint_segment(self._stroke_last, (ix, iy))
                 self._stroke_last = (ix, iy)
                 self.update()
+            elif self._wl_mode == "rect" and self._rect_grab is not None:
+                self._drag_rect_edges(event.pos())
             elif self._wl_mode == "rect" and self._rect_start is not None:
                 self._rect_end = event.pos()
                 self.update()
             # TC mode: no drag action (clicks only)
+        elif self._wl_mode == "rect":
+            self._rect_cursor(self._rect_hit(event.pos()))
 
         if self._wl_mode in ("paint", "poly"):
             self._cursor_pos = event.pos()   # brush circle / polygon rubber line
@@ -703,18 +802,24 @@ class ImageCanvas(QWidget):
                     self._stroke_last = None
                     self.annotation_changed.emit()
             elif self._wl_mode == "rect":
-                self._finish_rect()
+                if self._rect_grab is not None:
+                    self._rect_grab = None
+                else:
+                    self._finish_rect()
         elif event.button() == Qt.RightButton:
-            if not self._right_dragged and self._right_press is not None:
+            click = None if self._right_dragged else self._right_press
+            self._right_press   = None
+            self._right_dragged = False
+            if click is not None:
                 if self._wl_mode == "tc":
-                    self._tc_handle_right(self._right_press)
+                    self._tc_handle_right(click)
                 elif self._wl_mode == "roi_tc":
-                    self._roi_tc_remove_nearest(self._right_press)
+                    self._roi_tc_remove_nearest(click)
                 elif self._wl_mode == "poly" and self._poly_pts:
                     self._poly_pts.pop()       # right-click: drop last vertex
                     self.update()
-            self._right_press   = None
-            self._right_dragged = False
+                else:                          # a right-click the canvas has no use for
+                    self.context_requested.emit(event.globalPos())
 
     def mouseDoubleClickEvent(self, event) -> None:
         if self._wl_mode == "poly" and event.button() == Qt.LeftButton:

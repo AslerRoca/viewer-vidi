@@ -49,6 +49,7 @@ class ViewCell(QWidget):
     pixel_hovered  = pyqtSignal(int, int, float)
     double_clicked = pyqtSignal()          # request fullscreen toggle
     load_failed    = pyqtSignal(str)       # loader reported an error for the last request
+    load_finished  = pyqtSignal()          # every pixel of a load has arrived and is shown
 
     # True when TiltWheelReader delivers tilt from the kernel device instead
     # (Qt's X11 backend loses isolated horizontal detents — see tilt_evdev.py).
@@ -139,6 +140,16 @@ class ViewCell(QWidget):
         self._series_lbl.setObjectName("cellSeriesLabel")
         self._series_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
+        self._max_btn = QPushButton("⤢")
+        self._max_btn.setObjectName("cellMaxBtn")
+        self._max_btn.setCheckable(True)        # checked while this panel is enlarged
+        self._max_btn.setFocusPolicy(Qt.NoFocus)    # the canvas keeps the keyboard
+        self._max_btn.setToolTip(
+            "Enlarge this panel over the others; press again to bring them back.\n"
+            "Works with every tool. A double-click on the image does the same,\n"
+            "except while Brush, Polygon or Rect of the Workspace is selected.")
+        self._max_btn.clicked.connect(lambda: self.double_clicked.emit())
+
         h_lay = QHBoxLayout(self._header)
         h_lay.setContentsMargins(4, 2, 4, 2)
         h_lay.setSpacing(3)
@@ -151,6 +162,7 @@ class ViewCell(QWidget):
         h_lay.addWidget(self._info_btn)
         h_lay.addStretch(1)
         h_lay.addWidget(self._series_lbl)
+        h_lay.addWidget(self._max_btn)
 
         # ── Canvas + vertical slice slider ─────────────────────────────────
         self._canvas = ImageCanvas(self)
@@ -361,6 +373,10 @@ class ViewCell(QWidget):
         if self._sd:
             self._canvas.set_wl(self._sd.window_center, self._sd.window_width)
 
+    def set_enlarged(self, on: bool) -> None:
+        """QuadView reports that this panel fills the image area, or no longer does."""
+        self._max_btn.setChecked(on)
+
     def set_active(self, active: bool) -> None:
         self._active = active
         # Dynamic QSS property for border colour
@@ -431,7 +447,7 @@ class ViewCell(QWidget):
             self._render()
 
     def _on_load_complete(self) -> None:
-        pass
+        self.load_finished.emit()
 
     def _on_load_error(self, msg: str) -> None:
         self._load_error = msg or "unknown error"

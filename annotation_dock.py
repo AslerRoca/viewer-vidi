@@ -11,19 +11,22 @@ from __future__ import annotations
 import os
 from datetime import datetime
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication, QDockWidget, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QGroupBox, QPushButton, QLabel, QListWidget, QSpinBox, QCheckBox, QLineEdit,
-    QFileDialog, QMessageBox, QInputDialog, QButtonGroup,
+    QFileDialog, QMessageBox, QInputDialog, QButtonGroup, QMenu,
 )
 
-from .annotation_export import ExportInput, ExportOptions, export_item
+from . import drag_state
+from .annotation_export import (
+    ExportInput, ExportOptions, export_item, read_saved_mask, write_work_mask,
+)
 from .constants import DATA_ROOT
 from .data_model import SeriesType
 from .tree_panel import _make_series_meta
 from .workspace import (
-    DEFAULT_OUT_DIR, FILES_SEP, STATUS_DELETED, STATUS_SAVED, Workspace,
+    DEFAULT_OUT_DIR, FILES_SEP, LIST_EXTS, STATUS_DELETED, STATUS_SAVED, Workspace,
     build_workspace, manifest_source, parse_list_file, probe_workspace,
     read_manifest, remove_manifest_row, scan_images, write_manifest_row,
 )
@@ -34,13 +37,45 @@ _TOOLS = (
     ("Brush",   "paint", "Paint the mask (tick Erase to remove)"),
     ("Polygon", "poly",  "Click vertices; double-click or Enter fills the polygon,\n"
                          "right-click drops the last vertex, Esc cancels"),
-    ("Rect",    "rect",  "Drag the crop rectangle (ROI). Drag again to replace it"),
+    ("Rect",    "rect",  "Drag the crop rectangle (ROI). Drag one of its edges or corners to\n"
+                         "adjust it; drag anywhere else to draw a new one"),
 )
 _ANNOTATION_MODES = ("paint", "poly", "rect")
 
 
+class _ListDropButton(QPushButton):
+    """'Open list…' button that also takes one list file dragged from the study list."""
+
+    list_dropped = pyqtSignal(str)
+
+    def __init__(self, text: str):
+        super().__init__(text)
+        self.setAcceptDrops(True)
+
+    @staticmethod
+    def _list_file(event) -> str:
+        paths = drag_state.decode_paths(event.mimeData())
+        if len(paths) == 1 and os.path.splitext(paths[0])[1].lower() in LIST_EXTS:
+            return paths[0]
+        return ""           # a folder, an image, several items, or not from the study list
+
+    def dragEnterEvent(self, event) -> None:
+        if self._list_file(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event) -> None:
+        path = self._list_file(event)
+        if path:
+            event.acceptProposedAction()
+            self.list_dropped.emit(path)
+
+
 class AnnotationDock(QDockWidget):
     """Right-hand dock: Workspace (items + navigation), Tools, Export."""
+
+    item_saved = pyqtSignal()       # an item was written (MainWindow switches Invert off)
 
     def __init__(self, quad, parent=None):
         super().__init__("Workspace", parent)
@@ -49,11 +84,14 @@ class AnnotationDock(QDockWidget):
         self._quad = quad
         self._ws: Workspace | None = None
         self._index: int = -1
+        self._restore_cell = None   # panel loading the current item; its annotation is still to be put back
         self._start_dir = DATA_ROOT
         self._build_ui()
         for cell in quad.cells():
             cell.canvas().annotation_changed.connect(self._refresh_stats)
+            cell.canvas().context_requested.connect(self._show_tool_menu)
             cell.load_failed.connect(lambda msg, c=cell: self._on_load_failed(c, msg))
+            cell.load_finished.connect(lambda c=cell: self._restore_annotation(c))
 
     # ── UI ─────────────────────────────────────────────────────────────────
 
@@ -72,11 +110,15 @@ class AnnotationDock(QDockWidget):
             "Image mode: every DICOM / NIfTI / image file below the directory is one item.\n"
             "If the directory holds a list file instead, list mode is offered.")
         self._open_dir_btn.clicked.connect(self._open_dir)
-        self._open_list_btn = QPushButton("Open list…")
+        self._open_list_btn = _ListDropButton("Open list…")
         self._open_list_btn.setToolTip(
             "List mode: a .txt/.lst/.csv/.tsv file with one image path per line\n"
-            "(absolute, or relative to the list). Its directory becomes the workspace.")
+            "(absolute, or relative to the list). Its directory becomes the workspace.\n"
+            "A list can also be dragged onto this button from the study list.")
         self._open_list_btn.clicked.connect(self._open_list)
+        # Queued: a list without images is answered with a dialog, which must
+        # not open while the drop is still being delivered.
+        self._open_list_btn.list_dropped.connect(self._open_list_file, Qt.QueuedConnection)
         row.addWidget(self._open_dir_btn)
         row.addWidget(self._open_list_btn)
         g.addLayout(row)
@@ -87,7 +129,9 @@ class AnnotationDock(QDockWidget):
         g.addWidget(self._ws_lbl)
 
         self._list = QListWidget()
-        self._list.setToolTip("Double-click an item to load it into the active panel")
+        self._list.setToolTip("Double-click an item to load it into the active panel\n"
+                              "○ pending · ✓ saved · ⚠ saved without a rectangle or mask · "
+                              "⊘ deleted · ✗ could not be loaded")
         self._list.itemDoubleClicked.connect(
             lambda it: self._load_index(self._list.row(it)))
         g.addWidget(self._list, 1)
@@ -179,7 +223,8 @@ class AnnotationDock(QDockWidget):
         e.addWidget(QLabel("Content"), 1, 0)
         self._mask_chk = QCheckBox("Mask")
         self._mask_chk.setChecked(True)
-        self._mask_chk.setToolTip("<stem>_mask — the painted segmentation (plus <stem>_roi_mask inside a rectangle)")
+        self._mask_chk.setToolTip("<stem>_mask — the painted segmentation (plus <stem>_roi_mask inside a rectangle)\n"
+                                  "<stem>_rect_mask — the rectangle itself as a mask on the whole image")
         self._crop_chk = QCheckBox("Crop")
         self._crop_chk.setChecked(True)
         self._crop_chk.setToolTip("<stem>_roi — the rectangle cut out of the image")
@@ -243,9 +288,10 @@ class AnnotationDock(QDockWidget):
 
         The file stays on disk. A deleted mark is a manifest row with
         status 'deleted' (so it survives reopening and the other device);
-        products of an earlier save of the item are removed. Restoring drops
-        the row, so the item is pending again. The item stays on screen so a
-        second press undoes the first."""
+        products of an earlier save of the item are removed, its kept mask
+        too. Restoring drops the row, so the item is pending again. The item
+        stays on screen so a second press undoes the first. While the mark
+        is set, Save leaves the item alone (see _save)."""
         ws = self._ws
         if not self.isVisible() or ws is None or not (0 <= self._index < len(ws.items)):
             return
@@ -259,12 +305,14 @@ class AnnotationDock(QDockWidget):
             else:
                 previous = read_manifest(ws.manifest_path).get(item.stem, {})
                 removed = self._remove_products(ws, _split_files(previous.get("files", "")))
+                write_work_mask(ws.out_dir, item.stem, None)
                 write_manifest_row(ws.manifest_path, dict(
                     stem=item.stem, source=manifest_source(item.path, ws.root),
                     status=STATUS_DELETED,
                     saved_at=datetime.now().isoformat(timespec="seconds")))
                 item.deleted = True
                 item.done = False
+                item.empty = False
                 self._status_lbl.setText(
                     f"Marked {item.stem} as deleted (wrong picture)."
                     + (f" Removed {removed} earlier output file(s)." if removed else "")
@@ -374,8 +422,10 @@ class AnnotationDock(QDockWidget):
         f, _ = QFileDialog.getOpenFileName(
             self, "Select image list", self._start_dir,
             "Lists (*.txt *.lst *.csv *.tsv);;All files (*)")
-        if not f:
-            return
+        if f:
+            self._open_list_file(f)
+
+    def _open_list_file(self, f: str) -> None:
         paths = parse_list_file(f)
         if not any(os.path.isfile(p) for p in paths):
             QMessageBox.warning(self, "Empty list", f"No existing image paths found in\n{f}")
@@ -412,15 +462,20 @@ class AnnotationDock(QDockWidget):
             self._load_index(first_pending)
 
     @staticmethod
-    def _item_text(it) -> str:
-        mark = "⊘ " if it.deleted else ("✗ " if it.error else ("✓ " if it.done else "○ "))
-        return mark + it.stem
+    def _item_text(it, number: int = 0, width: int = 1) -> str:
+        """Mark, running number (the item's place in the list), stem. ⚠ is a
+        save that wrote neither a crop nor a mask (workspace.row_is_empty)."""
+        mark = ("⊘ " if it.deleted else "✗ " if it.error
+                else ("⚠ " if it.empty else "✓ ") if it.done else "○ ")
+        return mark + (f"{number:>{width}}  " if number else "") + it.stem
 
     def _refresh_item(self, i: int) -> None:
         """Sync one list row (text + strike-through for deleted) with its Item."""
         it = self._ws.items[i]
         row = self._list.item(i)
-        row.setText(self._item_text(it))
+        row.setText(self._item_text(it, i + 1, len(str(len(self._ws.items)))))
+        row.setToolTip("Saved without a rectangle or a mask — no crop was written."
+                       if it.done and it.empty else "")
         f = row.font()
         f.setStrikeOut(it.deleted)
         row.setFont(f)
@@ -445,9 +500,35 @@ class AnnotationDock(QDockWidget):
         self._refresh_item(i)
         cell = self._quad.active_cell()
         cell.load_meta(meta)          # resets the canvas mode → re-apply the tool
+        self._restore_cell = cell
         self._apply_tool(cell)
         self._update_nav()
         self._refresh_stats()
+
+    def _restore_annotation(self, cell) -> None:
+        """The current item has finished loading: put back the mask and the
+        rectangle of its last save, so a reopened item is adjusted or
+        re-exported instead of redrawn. Only on the view it was saved on."""
+        ws = self._ws
+        if cell is not self._restore_cell or ws is None or not (0 <= self._index < len(ws.items)):
+            return
+        item, sd = ws.items[self._index], cell.series_data()
+        if sd is None or os.path.realpath(sd.meta.series_dir) != os.path.realpath(item.path):
+            return                    # signal of a load that another one has overtaken
+        self._restore_cell = None
+        canvas = cell.canvas()
+        row = read_manifest(ws.manifest_path).get(item.stem, {})
+        if (row.get("status") != STATUS_SAVED or row.get("view", "") != cell.display_view()
+                or canvas.mask_pixels() or canvas.crop_rect()):   # never over fresh drawing
+            return
+        try:
+            rect = tuple(int(row[k]) for k in ("x0", "y0", "x1", "y1"))
+        except (KeyError, ValueError):
+            rect = None               # saved without a rectangle
+        mask = read_saved_mask(ws.out_dir, item.stem, _split_files(row.get("files", "")))
+        if mask is not None or rect is not None:
+            canvas.set_annotations(mask, rect)
+            self._status_lbl.setText(f"{item.stem}: annotation of the last save put back.")
 
     def _on_load_failed(self, cell, msg: str) -> None:
         """A panel's loader reported an error; flag the item it was showing."""
@@ -476,6 +557,8 @@ class AnnotationDock(QDockWidget):
         self._del_btn.style().polish(self._del_btn)
         if ws:
             txt = f"{self._index + 1}/{n} · {ws.n_done} done"
+            if ws.n_empty:
+                txt += f" · {ws.n_empty} without box/mask"
             if ws.n_deleted:
                 txt += f" · {ws.n_deleted} deleted"
             self._count_lbl.setText(txt)
@@ -501,6 +584,30 @@ class AnnotationDock(QDockWidget):
     def _apply_brush(self) -> None:
         self._canvas().set_brush(self._brush_spin.value(), self._erase_chk.isChecked())
 
+    def _tool_menu(self) -> QMenu:
+        """The tool row as a menu: the four tools (current one ticked) and Erase."""
+        menu = QMenu(self)
+        for label, mode, _tip in _TOOLS:
+            act = menu.addAction(label)
+            act.setCheckable(True)
+            act.setChecked(self._tool_btns[mode].isChecked())
+            act.triggered.connect(lambda _on, m=mode: self._tool_btns[m].click())
+        menu.addSeparator()
+        act = menu.addAction("Erase")
+        act.setCheckable(True)
+        act.setChecked(self._erase_chk.isChecked())
+        act.triggered.connect(self._erase_chk.setChecked)
+        return menu
+
+    def _show_tool_menu(self, global_pos) -> None:
+        """Right-click on an image: choose the tool at the cursor instead of
+        travelling to the dock. The click has already made that panel active."""
+        if not self.isVisible():
+            return
+        menu = self._tool_menu()
+        menu.exec_(global_pos)
+        menu.deleteLater()
+
     def _clear(self) -> None:
         self._canvas().clear_annotations()
 
@@ -520,6 +627,14 @@ class AnnotationDock(QDockWidget):
             self._status_lbl.setText("Open a workspace first.")
             return
         item = ws.items[self._index]
+        if item.deleted:              # a wrong picture stays unsaved; Restore is the way back
+            if advance and self._index < len(ws.items) - 1:
+                self._status_lbl.setText(f"Skipped {item.stem}: marked as deleted, nothing saved.")
+                self._load_index(self._index + 1)
+            else:
+                self._status_lbl.setText(f"{item.stem} is marked as deleted — nothing saved. "
+                                         "Press Restore first to save it.")
+            return
         cell = self._quad.active_cell()
         canvas = cell.canvas()
         sd = cell.series_data()
@@ -561,6 +676,8 @@ class AnnotationDock(QDockWidget):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             written = export_item(ws.out_dir, inp, opts)
+            if written:            # the mask itself is kept whatever was ticked
+                write_work_mask(ws.out_dir, item.stem, canvas.mask())
         except Exception as exc:   # disk full, permissions, missing writer …
             QMessageBox.critical(self, "Export failed", str(exc))
             return
@@ -590,7 +707,10 @@ class AnnotationDock(QDockWidget):
                 saved_at=datetime.now().isoformat(timespec="seconds"),
                 view=cell.display_view(), mask_pixels=canvas.mask_pixels(),
                 x0=x0, y0=y0, x1=x1, y1=y1,
-                formats=" ".join(formats), files=FILES_SEP.join(written)))
+                formats=" ".join(formats), files=FILES_SEP.join(written),
+                photometric=sd.photometric, invert=int(canvas.invert()),
+                wc=round(wc, 2), ww=round(ww, 2),
+                wl_default=int(abs(wc - sd.window_center) < 0.5 and abs(ww - sd.window_width) < 0.5)))
         except Exception as exc:   # read-only dir, manifest.csv is a folder, …
             QMessageBox.warning(
                 self, "Manifest not updated",
@@ -598,13 +718,14 @@ class AnnotationDock(QDockWidget):
                 f"manifest.csv could not be updated:\n{exc}\n\nThe item stays pending.")
             return
         item.done = True
-        item.deleted = False          # saving a deleted item restores it
+        item.empty = not rect and not canvas.mask_pixels()
         self._refresh_item(self._index)
         note = f" · old manifest moved to {os.path.basename(backup)}" if backup else ""
         self._status_lbl.setText(
             f"Saved {len(written)} file(s) → {ws.out_dir_name}/ ({', '.join(formats)})"
             + (f", removed {len(stale)} stale" if stale else "") + note)
         self._update_nav()
+        self.item_saved.emit()
         if advance and self._index < len(ws.items) - 1:
             self._load_index(self._index + 1)
 

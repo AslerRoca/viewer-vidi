@@ -80,8 +80,7 @@ def _make_series_meta(path: str) -> "SeriesMeta | GroupedSeriesMeta | None":
         )
 
     imgs = [f for f in files if os.path.splitext(f.lower())[1] in _IMAGE_EXTS]
-    has_subdirs = any(os.path.isdir(os.path.join(path, f)) for f in files)
-    if imgs and not has_subdirs:
+    if imgs and not any(os.path.isdir(os.path.join(path, f)) for f in files):
         return SeriesMeta(
             study_dir=os.path.dirname(path), series_dir=path,
             series_name=os.path.basename(path),
@@ -89,13 +88,17 @@ def _make_series_meta(path: str) -> "SeriesMeta | GroupedSeriesMeta | None":
             n_files=len(imgs), file_format="image",
         )
 
-    return _make_grouped_meta(path)
+    return _make_grouped_meta(path, files)
 
 
-def _make_grouped_meta(study_dir: str) -> "GroupedSeriesMeta | None":
+def _make_grouped_meta(study_dir: str, names: "list[str] | None" = None) -> "GroupedSeriesMeta | None":
+    """*names*: the listing of *study_dir* if the caller has read it already —
+    reading a folder of thousands of files twice is felt when a drag starts."""
     try:
+        if names is None:
+            names = os.listdir(study_dir)
         subdirs = sorted(
-            d for d in os.listdir(study_dir)
+            d for d in names
             if os.path.isdir(os.path.join(study_dir, d))
         )
     except OSError:
@@ -330,11 +333,11 @@ class _SmartProxy(QSortFilterProxyModel):
             return None
         meta = (_make_grouped_from_paths(paths) if len(paths) > 1 else None) \
                or _make_series_meta(paths[0])
-        if meta is None:
-            return None
-        drag_state.set_payload(meta)
-        mime = QMimeData()
-        mime.setData(drag_state.MIME_TYPE, b"1")
+        mime = QMimeData()      # the paths: Reports panel; the series: an image panel
+        mime.setData(drag_state.PATHS_MIME_TYPE, drag_state.encode_paths(paths))
+        if meta is not None:
+            drag_state.set_payload(meta)
+            mime.setData(drag_state.MIME_TYPE, b"1")
         return mime
 
     def _is_leaf_dir(self, path: str) -> bool:
@@ -360,7 +363,8 @@ class _FileTree(QTreeView):
       clicking an already-selected item inside a multi-selection does NOT clear
       the selection until mouse-release (pressedAlreadySelected mechanism).
     · _SmartProxy.mimeData() builds our payload and returns our MIME type so
-      ViewCell.dragEnterEvent accepts the drop.
+      ViewCell.dragEnterEvent accepts the drop; the dragged paths ride along
+      for the Reports panel.
     · startDrag() override only clears the drag_state payload after exec()
       in case the drag was cancelled without a drop.
     """

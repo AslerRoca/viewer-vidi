@@ -361,6 +361,30 @@ QPushButton#viewModeBtn:checked {
     border-color: #7c8fbd;
 }
 
+/* ─── Enlarge / restore button (right end of the cell header) ─ */
+QPushButton#cellMaxBtn {
+    background-color: transparent;
+    border: 1px solid #45475a;
+    border-radius: 3px;
+    padding: 0px 4px;
+    font-size: 13px;
+    color: #6c7086;
+    min-width: 14px;
+    max-height: 18px;
+}
+
+QPushButton#cellMaxBtn:hover {
+    background-color: #2a2a3e;
+    color: #cdd6f4;
+    border-color: #7c8fbd;
+}
+
+QPushButton#cellMaxBtn:checked {
+    background-color: #313244;
+    color: #cdd6f4;
+    border-color: #7c8fbd;
+}
+
 /* ─── Drop target label ───────────────────────────────────── */
 QLabel#dropLabel {
     color: #313244;
@@ -436,7 +460,8 @@ QSplitter#quadSplitterV::handle:hover {
 }
 
 /* ─── Annotation workspace dock ───────────────────────────── */
-QPushButton#wsBtn:checked {
+QPushButton#wsBtn:checked,
+QPushButton#reportBtn:checked {
     color: #7c8fbd;
     border-color: #7c8fbd;
 }
@@ -520,4 +545,13 @@ QPushButton#deleteBtn:enabled {
 QPushButton#deleteBtn[restore="true"] {
     color: #a6e3a1;
     border-color: #a6e3a1;
+}
+
+/* ─── Reports dock ────────────────────────────────────────── */
+QTextBrowser#reportView {
+    background-color: #181825;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    padding: 6px;
+    selection-background-color: #7c8fbd;
 }

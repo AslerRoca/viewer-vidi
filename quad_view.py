@@ -18,6 +18,9 @@ class QuadView(QWidget):
 
     Fullscreen: hide 3 cells + collapse their splitter halves so the selected
     cell fills the entire QuadView area.
+
+    Right column hidden (set_right_column_hidden): cells[1] and cells[3] are
+    hidden so the docked Reports pane can take their place.
     """
 
     active_cell_changed = pyqtSignal(object)    # ViewCell
@@ -33,6 +36,8 @@ class QuadView(QWidget):
         self._saved_v_sizes:   list[int] = []
         self._saved_top_sizes: list[int] = []
         self._saved_bot_sizes: list[int] = []
+        self._right_hidden = False              # right column given to the Reports dock
+        self._saved_col_sizes: tuple = ()       # (top, bottom) column widths before that
 
         self._splitter_top = QSplitter(Qt.Horizontal)
         self._splitter_top.setObjectName("quadSplitterH")
@@ -95,6 +100,25 @@ class QuadView(QWidget):
     def is_fullscreen(self) -> bool:
         return self._fs_cell is not None
 
+    def set_right_column_hidden(self, hidden: bool) -> None:
+        """Hide / show the two right-hand cells. Series loaded in them stay
+        loaded; an active right-hand cell hands over to its left neighbour."""
+        if hidden == self._right_hidden:
+            return
+        if self._fs_cell is not None:       # its saved sizes belong to the other layout
+            self._exit_fullscreen()
+        self._right_hidden = hidden
+        right = (self._cells[1], self._cells[3])
+        if hidden:
+            self._saved_col_sizes = (self._splitter_top.sizes(), self._splitter_bot.sizes())
+        for c in right:
+            c.setVisible(not hidden)
+        if not hidden:      # the sizes act as weights — the view has another width by now
+            self._splitter_top.setSizes(self._saved_col_sizes[0])
+            self._splitter_bot.setSizes(self._saved_col_sizes[1])
+        elif self._active in right:
+            self._set_active(self._cells[self._cells.index(self._active) - 1])
+
     # ── Active cell ────────────────────────────────────────────────────────
 
     def _on_activated(self, cell: ViewCell) -> None:
@@ -124,6 +148,7 @@ class QuadView(QWidget):
 
     def _enter_fullscreen(self, cell: ViewCell) -> None:
         self._fs_cell = cell
+        cell.set_enlarged(True)
         # Save current splitter sizes so we can restore them
         self._saved_v_sizes   = self._splitter_v.sizes()
         self._saved_top_sizes = self._splitter_top.sizes()
@@ -154,7 +179,8 @@ class QuadView(QWidget):
 
     def _exit_fullscreen(self) -> None:
         for c in self._cells:
-            c.setVisible(True)
+            c.setVisible(not (self._right_hidden and c in (self._cells[1], self._cells[3])))
+            c.set_enlarged(False)
 
         # Restore saved sizes (or equal split if none saved)
         if self._saved_v_sizes:
