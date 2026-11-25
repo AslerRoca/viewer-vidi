@@ -31,6 +31,9 @@ Still to do:
       removes the item's JPEG / NIfTI / whole-image products of the earlier save without a word.
       Options: take the ticks from the manifest when a workspace with saved rows is opened;
       and / or ask before a save removes products of formats that are not ticked.
+      Until then: set the ticks by hand before re-saving anything in a fresh session. The 13
+      items of the first crop job that lost products this way were completed from the manifest
+      on 2026-11-25 (one-off script, not in the repo).
 - [x] **Default window of films that carry a VOI LUT instead of a window** (found and fixed
       2026-11-25; seen on AGFA ADC CR films). User chose option A: `wl_from_dicom` takes the
       LUT's input range as the default window when the header has no window. The manifest
@@ -43,7 +46,19 @@ Still to do:
       8-bit export (the maker's exact picture) — was not chosen; only if option A's flatter
       picture turns out not to be enough.
 - [ ] Films with a header window whose 8-bit products were saved with a hand-set window are
-      left as they are by `update_exports.py`; decide whether they should follow the default too.
+      left as they are by `update_exports.py`; decide whether they should follow the default too
+      (10 films of the first crop job).
+- [ ] **Backup copies in the output directory of the first crop job** — three
+      `replaced-<time>/` folders and two `manifest.csv.before-*` copies (about 1.4 GB) from the
+      tool runs of 2026-11-25. Delete them once the re-rendered and flipped products have been
+      looked at; only on the user's word.
+- [ ] **Check on a real display** — everything of this round was tested headless only:
+      right-click tool menu, annotation put back on reopen, list marks, the default window of
+      VOI-LUT films, the Reports panel, list drop, rectangle adjustment, enlarge button. Takes
+      over the check pending since 2026-10-26 (brush feel, dock layout).
+- [ ] **Decide whether to merge `wip/report-viewer` → `master`.** The branch carries
+      `wip/roi-export` (annotation workspace, with the unverified `wip/invert` work), the Reports
+      panel and this round.
 - [ ] Possible additions nobody asked for yet: Undo / Clear in the right-click menu; putting the
       annotation back on a volume slice other than the one shown right after loading.
 
@@ -102,5 +117,5 @@ verification routes from the first draft of this file are no longer needed for t
 - [ ] Output dir `.` is still accepted at the `workspace.py` API level (the dock rejects it).
 - [ ] In-progress polygon vertices are dropped when switching panels (#54).
 - [ ] Toolbar W/L spins not synced after a tree load (#63, pre-existing).
-- [ ] Visual check on a real display (brush feel, dock layout) — pending since 2026-10-26.
-- [ ] Decide whether to merge `wip/roi-export` → `master` (also carries the unverified `wip/invert` work).
+- [ ] Visual check on a real display and the merge decision — now listed at the top of this
+      file (round of 2026-11-25), since `wip/report-viewer` carries this branch.
